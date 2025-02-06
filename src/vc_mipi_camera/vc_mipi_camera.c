@@ -3,12 +3,12 @@
 #include <linux/gpio/consumer.h>
 #include <linux/pm_runtime.h>
 #include <linux/version.h>
-
 #include <linux/of_graph.h> //MS
 #include <media/v4l2-subdev.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-event.h>
+#include <media/v4l2-ioctl.h>
 
 #define VERSION "0.2.1"
 
@@ -22,7 +22,10 @@ int vc_sd_enum_frame_size(struct v4l2_subdev *sd, struct v4l2_subdev_state *stat
 static int vc_sd_get_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state, struct v4l2_subdev_format *fmt);
 static int vc_sd_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state, struct v4l2_subdev_format *fmt);
 static int vc_sd_get_selection(struct v4l2_subdev *sd, struct v4l2_subdev_state *state, struct v4l2_subdev_selection *sel);
+int vc_get_selection(struct v4l2_subdev *sd, struct v4l2_subdev_state *state, struct v4l2_subdev_selection *sel);
 static int vc_sd_set_selection(struct v4l2_subdev *sd, struct v4l2_subdev_state *state, struct v4l2_subdev_selection *sel);
+static int vc_set_selection(struct v4l2_subdev *sd, struct v4l2_subdev_state *state, struct v4l2_subdev_selection *sel);
+
 int vc_sd_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh);
 void vc_sd_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh);
 int vc_sd_queryctrl(struct v4l2_subdev *sd, struct v4l2_queryctrl *qc);
@@ -165,7 +168,6 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
 {
         struct vc_cam *cam = to_vc_cam(sd);
         struct device *dev = vc_core_get_sen_device(cam);
-        __u32 left, top;
 
         switch (control->id)
         {
@@ -186,7 +188,6 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
 
         case V4L2_CID_BLACK_LEVEL:
                 return vc_sen_set_blacklevel(cam, control->value);
-#if 1
         case V4L2_CID_VC_TRIGGER_MODE:
                 return vc_mod_set_trigger_mode(cam, control->value);
 
@@ -200,12 +201,11 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
                 return vc_mod_set_single_trigger(cam);
 
         case V4L2_CID_VC_BINNING_MODE:
-                return 0; // TODO vc_sen_set_binning_mode(cam, control->value);
+                return vc_core_set_binning_mode(cam, control->value);
 
         case V4L2_CID_VC_ROI_POSITION:
                 return vc_core_live_roi(cam, control->value);
 
-#endif
         default:
                 vc_warn(dev, "%s(): Unkown control 0x%08x\n", __func__, control->id);
                 return -EINVAL;
@@ -807,7 +807,7 @@ static const struct v4l2_ctrl_config ctrl_flash_mode = {
     .type = V4L2_CTRL_TYPE_INTEGER,
     .flags = V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
     .min = 0,
-    .max = 1,
+    .max = 8,
     .step = 1,
     .def = 0,
 };
@@ -1056,6 +1056,95 @@ static const struct media_entity_operations vc_sd_media_ops = {
     .link_setup = vc_link_setup,
 };
 
+static int vidioc_sd_selection(struct v4l2_subdev *sd,
+                            struct v4l2_subdev_selection *sel)
+{
+        struct vc_device *device = to_vc_device(sd);
+        struct vc_cam *cam = to_vc_cam(sd);
+        struct device *dev = &device->cam.ctrl.client_sen->dev;
+
+        if (sel->which != V4L2_SUBDEV_FORMAT_ACTIVE)
+                return -EINVAL;
+
+        if (sel->target != V4L2_SEL_TGT_CROP)
+                return -EINVAL;
+
+        vc_dbg(dev, "%s(): Set selection (left: %u, top: %u, width: %u, height: %u)\n", 
+               __FUNCTION__, sel->r.left, sel->r.top, sel->r.width, sel->r.height);
+
+        mutex_lock(&device->mutex);
+        vc_core_set_frame(cam, sel->r.left, sel->r.top, sel->r.width, sel->r.height);
+        mutex_unlock(&device->mutex);
+
+        return 0;
+}
+
+static int vidioc_cropcap(struct v4l2_subdev *sd,
+                         struct v4l2_cropcap *cropcap)
+{
+        struct vc_device *device = to_vc_device(sd);
+        struct vc_cam *cam = to_vc_cam(sd);
+        struct device *dev = &device->cam.ctrl.client_sen->dev;
+
+        if (cropcap->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+                return -EINVAL;
+
+        vc_dbg(dev, "%s(): Get crop capabilities\n", __FUNCTION__);
+
+        cropcap->bounds.left = 0;
+        cropcap->bounds.top = 0;
+        cropcap->bounds.width = cam->ctrl.frame.width;
+        cropcap->bounds.height = cam->ctrl.frame.height;
+
+        // Set same values for defrect as it represents the default crop rectangle
+        cropcap->defrect = cropcap->bounds;
+
+        // No pixel aspect ratio distortion
+        cropcap->pixelaspect.numerator = 1;
+        cropcap->pixelaspect.denominator = 1;
+
+        return 0;
+}
+int vc_sd_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
+{
+        struct vc_device *device = to_vc_device(sd);
+        struct vc_cam *cam = to_vc_cam(sd);
+        struct v4l2_mbus_framefmt *try_fmt_img =
+		v4l2_subdev_get_try_format(sd, fh->state, IMAGE_PAD);
+	struct v4l2_mbus_framefmt *try_fmt_meta =
+		v4l2_subdev_get_try_format(sd, fh->state, METADATA_PAD);
+	struct v4l2_rect *try_crop;
+
+        mutex_lock(&device->mutex);
+
+	/* Initialize try_fmt for the image pad */
+	try_fmt_img->width = cam->ctrl.frame.width;
+	try_fmt_img->height = cam->ctrl.frame.height;
+	try_fmt_img->code = vc_core_get_format(cam);
+	try_fmt_img->field = V4L2_FIELD_NONE;
+
+	/* Initialize try_fmt for the embedded metadata pad */
+	try_fmt_meta->width = cam->ctrl.frame.width;
+	try_fmt_meta->height = cam->ctrl.frame.height;
+	try_fmt_meta->code = MEDIA_BUS_FMT_SENSOR_DATA;
+	try_fmt_meta->field = V4L2_FIELD_NONE;
+
+	/* Initialize try_crop */
+	try_crop = v4l2_subdev_get_try_crop(sd, fh->state, IMAGE_PAD);
+	try_crop->left = 0;
+	try_crop->top = 0;
+	try_crop->width = cam->ctrl.frame.width;
+	try_crop->height = cam->ctrl.frame.height;
+
+	mutex_unlock(&device->mutex);
+
+	return 0;
+}
+
+
+static const struct v4l2_subdev_internal_ops vc_internal_ops = {
+	.open = vc_sd_open,
+};
 static int vc_probe(struct i2c_client *client)
 {
         struct device *dev = &client->dev;
@@ -1079,7 +1168,6 @@ static int vc_probe(struct i2c_client *client)
         ret = vc_core_init(cam, client);
         if (ret)
                 goto error_power_off;
-        cam->ctrl.flags |= FLAG_FORMAT_PACKED; //Raspi packed formats for 10bit
 
 
         ret = vc_check_hwcfg(cam, dev); 
@@ -1096,6 +1184,7 @@ static int vc_probe(struct i2c_client *client)
         device->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS;
         device->pad.flags = MEDIA_PAD_FL_SOURCE;
         device->sd.entity.ops = &vc_sd_media_ops;
+        device->sd.internal_ops = &vc_internal_ops;
         device->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
         ret = media_entity_pads_init(&device->sd.entity, 1, &device->pad);
         if (ret)
