@@ -11,8 +11,8 @@ DTC_FLAGS ?= -@ -I dts -O dtb -Wno-unit_address_vs_reg
 
 
 
-SENSOR_NAMES := vc-mipi-bcm2712-cam0
-SENSOR_NAMES += vc-mipi-bcm2712-cam1
+SENSOR_NAMES := vc-mipi-bcm2711-cam0
+SENSOR_NAMES += vc-mipi-bcm2711-cam1
 SENSOR_NAMES += vc-mipi-common-memory-contiguous
 
 
@@ -55,7 +55,7 @@ dtbo: $(DEVICETREES)
 overlays/%.dtbo: overlays/%.dts
 	$(DTC) $(DTC_FLAGS) -o $@ $<
 
-overlays/vc-mipi-bcm2712-cam0.dtbo: overlays/vc-mipi-bcm2712-cam0-overlay.dts
+overlays/vc-mipi-bcm2711-cam0.dtbo: overlays/vc-mipi-bcm2711-cam0-overlay.dts
 	dtc -W no-unit_address_vs_reg -@ -I dts -O dtb  -o $@  $<
 
 KERNEL_HEADERS := /lib/modules/$(shell uname -r)/build
@@ -113,12 +113,9 @@ install: all
 	sudo /sbin/depmod -a $(shell uname -r)
 	sudo cp overlays/*.txt /boot/firmware/
 	sudo mkdir -p /usr/local/bin
-	sudo cp set_rpi5_pipeline.sh /usr/local/bin
-	sudo chmod +x /usr/local/bin/set_rpi5_pipeline.sh
-	sudo cp 99-camera-setup.rules /etc/udev/rules.d/
 	sudo cp vc-config /usr/local/bin/
 	sudo chmod +x /usr/local/bin/vc-config
-	echo "include config_vc-mipi-driver-bcm2712.txt" | sudo tee -a  /boot/firmware/config.txt
+	echo "include config_vc-mipi-driver-bcm2711.txt" | sudo tee -a  /boot/firmware/config.txt
 
 uninstall:
 	sudo rm -f $(foreach sentype,$(SENSOR_NAMES),$(KERNEL_I2C_DIR)/$(sentype).ko)
@@ -128,7 +125,7 @@ uninstall:
 	@echo "--------------------------------------"
 	@echo
 	@echo "  Call  debian/postrm  for deactivating the configuration file in your /boot/config.txt"
-	@echo "  You may remove the configuration file /boot/config_vc-mipi-driver-bcm2712.txt for cleanup"
+	@echo "  You may remove the configuration file /boot/config_vc-mipi-driver-bcm2711.txt for cleanup"
 	@echo
 	@echo "--------------------------------------"
 

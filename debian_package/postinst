@@ -6,7 +6,7 @@
 
 set -e
 TEST=0
-NAME="vc-mipi-driver-bcm2712"
+NAME="vc-mipi-driver-${TARGET_PLATFORM}"
 VERSION="$VERSION_DEB_PACKAGE"
 PACKAGE_NAME=$NAME
 DEB_NAME=$(echo $PACKAGE_NAME | sed 's,_,-,')
@@ -37,22 +37,18 @@ add_config ()
     echo "Adding config file to /boot/firmware"
 
     # Copy config files from /usr/share to /boot/firmware
-    if [ -f /usr/share/vc-mipi-driver-bcm2712-dkms/overlays/config_vc-mipi-driver-bcm2712-raspi5.txt ]; then
-        echo "Copying config file config_vc-mipi-driver-bcm2712-raspi5.txt"
-
-        cp -f /usr/share/vc-mipi-driver-bcm2712-dkms/overlays/config_vc-mipi-driver-bcm2712-raspi5.txt /boot/firmware/ || true
+   
+    if [ -f /usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/overlays/config_vc-mipi-driver-${TARGET_PLATFORM}.txt ]; then
+        echo "Copying config file config_vc-mipi-driver-${TARGET_PLATFORM}.txt"
+        cp -f /usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/overlays/config_vc-mipi-driver-${TARGET_PLATFORM}.txt /boot/firmware/ || true
     fi
-    if [ -f /usr/share/vc-mipi-driver-bcm2712-dkms/overlays/config_vc-mipi-driver-bcm2712.txt ]; then
-        echo "Copying config file config_vc-mipi-driver-bcm2712.txt"
-        cp -f /usr/share/vc-mipi-driver-bcm2712-dkms/overlays/config_vc-mipi-driver-bcm2712.txt /boot/firmware/ || true
-    fi
-    if [ -d /usr/src/vc-mipi-driver-bcm2712-${VERSION}/overlays ]; then
+    if [ -d /usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION}/overlays ]; then
         echo "Copying overlay files"
-        cp -rf /usr/src/vc-mipi-driver-bcm2712-${VERSION}/overlays /boot/firmware/ || true
+        cp -rf /usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION}/overlays /boot/firmware/ || true
     fi
-        if [ -f /usr/share/vc-mipi-driver-bcm2712-dkms/99-camera-setup.rules ]; then
+        if [ -f /usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/99-camera-setup.rules ]; then
         echo "Copying udev rule"
-        cp -rf /usr/share/vc-mipi-driver-bcm2712-dkms/99-camera-setup.rules /etc/udev/rules.d/ || true
+        cp -rf /usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/99-camera-setup.rules /etc/udev/rules.d/ || true
     fi
     
 
@@ -63,8 +59,8 @@ add_config ()
     cp $CONFIG_FILE ${CONFIG_FILE}.bak
 
     # Add dtoverlay lines if not present
-    if ! grep -q "include config_vc-mipi-driver-bcm2712.txt" "$CONFIG_FILE"; then
-        echo "include config_vc-mipi-driver-bcm2712.txt" >> "$CONFIG_FILE"
+    if ! grep -q "include config_vc-mipi-driver-${TARGET_PLATFORM}.txt" "$CONFIG_FILE"; then
+        echo "include config_vc-mipi-driver-${TARGET_PLATFORM}.txt" >> "$CONFIG_FILE"
     fi
 }
 

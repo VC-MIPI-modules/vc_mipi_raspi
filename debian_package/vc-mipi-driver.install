@@ -1,0 +1,21 @@
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/dkms.conf usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/Makefile usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/overlays/*.txt usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/overlays/
+
+usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/debian/postinst usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/debian/
+usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/debian/postrm usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/debian/
+
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/overlays/*.dtbo  usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/overlays/
+
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/vc_mipi_camera/*.c usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/vc_mipi_camera/
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/vc_mipi_camera/Makefile usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/vc_mipi_camera/
+
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/vc_mipi_core/*.c usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/vc_mipi_core/
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/vc_mipi_core/*.h usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/vc_mipi_core/
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/vc_mipi_core/Makefile usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/vc_mipi_core/
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/vc_mipi_core/Kbuild usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/vc_mipi_core/
+
+
+usr/local/bin/vc-config usr/local/bin/
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/vc-config usr/local/bin
+

@@ -1,17 +1,16 @@
 # debian/not-installed
-usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/**/.git*
-usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/**/.*.cmd
-usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/**/*.ko
-usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/**/*.mod*
-usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/**/*.o*
-usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/**/.*.o.d
-usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/**/modules.order
-usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/Module.symvers
-usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/Module.symvers.cmd
-usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/.modules.order.cmd
-usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/.Module.symvers.cmd
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/**/.git*
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/**/.*.cmd
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/**/*.ko
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/**/*.mod*
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/**/*.o*
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/**/.*.o.d
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/**/modules.order
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/Module.symvers
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/Module.symvers.cmd
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/.modules.order.cmd
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/.Module.symvers.cmd
 
-usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/modules.order
-usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/**/*.dts
-boot/firmware/config_vc-mipi-driver-bcm2712.txt
-boot/firmware/config_vc-mipi-driver-bcm2712-raspi5.txt
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/modules.order
+usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/**/*.dts
+boot/firmware/config_vc-mipi-driver-${TARGET_PLATFORM}.txt

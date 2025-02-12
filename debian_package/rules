@@ -9,43 +9,33 @@ override_dh_auto_build:
 	cd src && $(MAKE) dtbo
 
 override_dh_auto_install:
-	echo "DEBUG: NAME is vc-mipi-driver-bcm2712"
+	echo "DEBUG: NAME is vc-mipi-driver-${TARGET_PLATFORM}"
 	# Divert the files to prevent dpkg from making backup links
-	dpkg-divert --local --rename --add /boot/firmware/config_vc-mipi-driver-bcm2712-raspi5.txt
-	dpkg-divert --local --rename --add /boot/firmware/config_vc-mipi-driver-bcm2712.txt
+	dpkg-divert --local --rename --add /boot/firmware/config_vc-mipi-driver-${TARGET_PLATFORM}.txt
 
 	# Install to tmp directory with verbose output
-	mkdir -p $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/
-	mkdir -p $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-bcm2712-dkms/overlays/
+	mkdir -p $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/
+	mkdir -p $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/overlays/
 	mkdir -p $(CURDIR)/debian/tmp/etc/udev/rules.d/
 	mkdir -p $(CURDIR)/debian/tmp/usr/local/bin/
 	mkdir -p $(CURDIR)/debian/tmp/boot/firmware/overlays/
-	mkdir -p $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-bcm2712-dkms/debian/ 
+	mkdir -p $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/debian/ 
 
-	cp -v dkms.conf $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/
-	cp -rv src/. $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/
-	cp src/set_rpi5_pipeline.sh $(CURDIR)/debian/tmp/usr/local/bin/
-	chmod 755 $(CURDIR)/debian/tmp/usr/local/bin/set_rpi5_pipeline.sh
-	rm -f $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/set_rpi5_pipeline.sh
-	rm -f $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/99-camera-setup.rules
-	cp src/99-camera-setup.rules $(CURDIR)/debian/tmp/etc/udev/rules.d/
-	chmod 755 $(CURDIR)/debian/tmp/etc/udev/rules.d/99-camera-setup.rules
-	chmod 644 src/overlays/config_vc-mipi-driver-bcm2712-raspi5.txt
-	chmod 644 src/overlays/config_vc-mipi-driver-bcm2712.txt
+	cp -v dkms.conf $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/
+	cp -rv src/. $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/
+	chmod 644 src/overlays/config_vc-mipi-driver-${TARGET_PLATFORM}.txt
 
-	cp src/overlays/config_vc-mipi-driver-bcm2712-raspi5.txt $(CURDIR)/debian/tmp/boot/firmware/
-	cp src/overlays/config_vc-mipi-driver-bcm2712.txt $(CURDIR)/debian/tmp/boot/firmware/
-	chmod 644 $(CURDIR)/debian/tmp/boot/firmware/config_vc-mipi-driver-bcm2712-raspi5.txt
-	chmod 644 $(CURDIR)/debian/tmp/boot/firmware/config_vc-mipi-driver-bcm2712.txt
+	cp src/overlays/config_vc-mipi-driver-${TARGET_PLATFORM}.txt $(CURDIR)/debian/tmp/boot/firmware/
+	chmod 644 $(CURDIR)/debian/tmp/boot/firmware/config_vc-mipi-driver-${TARGET_PLATFORM}.txt
 	cp src/vc-config $(CURDIR)/debian/tmp/usr/local/bin/
 	chmod 755 $(CURDIR)/debian/tmp/usr/local/bin/vc-config
 
-	cp debian/postinst $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-bcm2712-dkms/debian/ 
-	cp debian/postrm $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-bcm2712-dkms/debian/ 
-	chmod 755 $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-bcm2712-dkms/debian/postinst
-	chmod 755 $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-bcm2712-dkms/debian/postrm
+	cp debian/postinst $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/debian/ 
+	cp debian/postrm $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/debian/ 
+	chmod 755 $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/debian/postinst
+	chmod 755 $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/debian/postrm
 
-	cd $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/ && $(MAKE) dtbo
+	cd $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION_DEB_PACKAGE}/ && $(MAKE) dtbo
 
 	chmod -R 644 $(CURDIR)/debian/tmp/boot/firmware/overlays/
 	
@@ -53,8 +43,7 @@ override_dh_auto_install:
 	dh_install --sourcedir=$(CURDIR)/debian/tmp --verbose 
 
 	# Undivert the files after installation
-	dpkg-divert --local --rename --remove /boot/firmware/config_vc-mipi-driver-bcm2712-raspi5.txt
-	dpkg-divert --local --rename --remove /boot/firmware/config_vc-mipi-driver-bcm2712.txt
+	dpkg-divert --local --rename --remove /boot/firmware/config_vc-mipi-driver-${TARGET_PLATFORM}.txt
 
 override_dh_missing:
 	dh_missing --fail-missing
