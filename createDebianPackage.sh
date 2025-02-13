@@ -14,6 +14,7 @@ cp -r debian_package build/debian
 mkdir -p build/debian
 cp -r src build/
 
+envsubst '$VERSION_DEB_PACKAGE $TARGET_PLATFORM' < src/overlays/config_vc-mipi-driver-bcm2711.txt > build/src/overlays/config_vc-mipi-driver-bcm2711.txt
 
 envsubst '$VERSION_DEB_PACKAGE $TARGET_PLATFORM' < debian_package/changelog > build/debian/changelog
 envsubst '$VERSION_DEB_PACKAGE $TARGET_PLATFORM' < dkms.conf > build/dkms.conf

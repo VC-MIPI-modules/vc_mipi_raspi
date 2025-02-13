@@ -46,10 +46,7 @@ add_config ()
         echo "Copying overlay files"
         cp -rf /usr/src/vc-mipi-driver-${TARGET_PLATFORM}-${VERSION}/overlays /boot/firmware/ || true
     fi
-        if [ -f /usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/99-camera-setup.rules ]; then
-        echo "Copying udev rule"
-        cp -rf /usr/share/vc-mipi-driver-${TARGET_PLATFORM}-dkms/99-camera-setup.rules /etc/udev/rules.d/ || true
-    fi
+        
     
 
 
