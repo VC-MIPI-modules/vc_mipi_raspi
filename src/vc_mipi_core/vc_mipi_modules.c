@@ -611,6 +611,8 @@ static void vc_init_ctrl_imx462(struct vc_ctrl *ctrl, struct vc_desc *desc)
         //                      mode           min       max    def   max   def
         MODE( 0, 2, FORMAT_RAW10, 0,    1100,    1,  0x3ffff, 0x465,  511,   60,         0)
         MODE( 1, 4, FORMAT_RAW10, 0,     550,    1,  0x3ffff, 0x465,  511,   60,         0)
+        MODE( 2, 2, FORMAT_RAW12, 0,    2200,    1,  0x3ffff, 0x465,  511,   60,         0)
+
 }
 
 // ------------------------------------------------------------------------------------------------
