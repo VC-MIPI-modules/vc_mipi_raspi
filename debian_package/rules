@@ -11,7 +11,6 @@ override_dh_auto_build:
 override_dh_auto_install:
 	echo "DEBUG: NAME is vc-mipi-driver-bcm2712"
 	# Divert the files to prevent dpkg from making backup links
-	dpkg-divert --local --rename --add /boot/firmware/config_vc-mipi-driver-bcm2712-raspi5.txt
 	dpkg-divert --local --rename --add /boot/firmware/config_vc-mipi-driver-bcm2712.txt
 
 	# Install to tmp directory with verbose output
@@ -30,12 +29,9 @@ override_dh_auto_install:
 	rm -f $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/99-camera-setup.rules
 	cp src/99-camera-setup.rules $(CURDIR)/debian/tmp/etc/udev/rules.d/
 	chmod 755 $(CURDIR)/debian/tmp/etc/udev/rules.d/99-camera-setup.rules
-	chmod 644 src/overlays/config_vc-mipi-driver-bcm2712-raspi5.txt
 	chmod 644 src/overlays/config_vc-mipi-driver-bcm2712.txt
 
-	cp src/overlays/config_vc-mipi-driver-bcm2712-raspi5.txt $(CURDIR)/debian/tmp/boot/firmware/
 	cp src/overlays/config_vc-mipi-driver-bcm2712.txt $(CURDIR)/debian/tmp/boot/firmware/
-	chmod 644 $(CURDIR)/debian/tmp/boot/firmware/config_vc-mipi-driver-bcm2712-raspi5.txt
 	chmod 644 $(CURDIR)/debian/tmp/boot/firmware/config_vc-mipi-driver-bcm2712.txt
 	cp src/vc-config $(CURDIR)/debian/tmp/usr/local/bin/
 	chmod 755 $(CURDIR)/debian/tmp/usr/local/bin/vc-config
@@ -53,7 +49,6 @@ override_dh_auto_install:
 	dh_install --sourcedir=$(CURDIR)/debian/tmp --verbose 
 
 	# Undivert the files after installation
-	dpkg-divert --local --rename --remove /boot/firmware/config_vc-mipi-driver-bcm2712-raspi5.txt
 	dpkg-divert --local --rename --remove /boot/firmware/config_vc-mipi-driver-bcm2712.txt
 
 override_dh_missing:
