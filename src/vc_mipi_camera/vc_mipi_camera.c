@@ -243,9 +243,9 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
 
                 ret = vc_mod_set_mode(cam, &reset);
                 ret |= vc_sen_set_roi(cam);
+                ret |= vc_sen_set_exposure(cam, cam->state.exposure);
                 if (!ret && reset)
                 {
-                        ret |= vc_sen_set_exposure(cam, cam->state.exposure);
                         ret |= vc_sen_set_gain(cam, cam->state.gain, false);
                         ret |= vc_sen_set_blacklevel(cam, cam->state.blacklevel);
                 }
