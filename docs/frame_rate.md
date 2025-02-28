@@ -17,6 +17,8 @@ The frame rate depends on:
 * Streaming mode 
 * Exposure time
 
+The value's unit is mHz.
+
 If set to 0, the maximum frame rate will be set at the start of streaming.
 The maximum of the control will also be set at the start of streaming.
 If values are set that reduce the frame rate, the frame rate will be reduced automatically, 
