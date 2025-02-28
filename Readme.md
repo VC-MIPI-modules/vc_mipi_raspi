@@ -57,10 +57,10 @@ If no specific configuration is needed, the "more lanes" configuration is the fi
 Here, there are also the possibilities to change the values of the controls and also the Region of Interests (ROI)
 3. The formats can be adjusted. All formats are displayed, although not all are available which depends on the sensor model
 
-![Cam Controls](./docs/whiptail_controls.png "Cam Controls")
-![Cam Selection](./docs/whiptail_cam_selection.png "Cam Selection")
-![Lanes configuration](./docs/whiptail_lanes_config.png "Lanes configuration")
-![Format Selection](./docs/whiptail_format_settings.png "Format settings")
+![Cam Controls](./docs/images/whiptail_controls.png "Cam Controls")
+![Cam Selection](./docs/images/whiptail_cam_selection.png "Cam Selection")
+![Lanes configuration](./docs/images/whiptail_lanes_config.png "Lanes configuration")
+![Format Selection](./docs/images/whiptail_format_settings.png "Format settings")
 
 
 # Support Tool
@@ -92,7 +92,7 @@ For getting the live image on screen, add the argument `--fb`
 
 On desktop version, first you have to switch to console mode `Ctrl + Alt + F1`
 
-![Console mode](./docs/RaspiDesktopFramebuffer.gif)
+![Console mode](./docs/images/RaspiDesktopFramebuffer.gif)
 
 # Controls
 1. [Black level](./docs/black_level.md)
