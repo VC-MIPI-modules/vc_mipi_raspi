@@ -136,8 +136,7 @@ configure_video_device() {
             height=$(echo $resolution | awk -F 'x' '{ print $2 }')
             mediabusfmt=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15- | xargs echo -n)
             format="$mediabusfmt/$resolution"
-            #read a
-            #
+
             echo "Code: $fmt"
             echo "media-ctl -d "$mediadev" -V ''\''csi2'\'':4 [fmt:'"$format"' field:none colorspace:srgb]'" 
             media-ctl -d "$mediadev" -V ''\''csi2'\'':4 [fmt:'"$format"' field:none colorspace:srgb]' 
@@ -145,7 +144,9 @@ configure_video_device() {
             media-ctl -d "$mediadev" -l ''\''csi2'\'':4 -> '\''rp1-cfe-csi2_ch0'\'':0 [1]' 
             v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb 
             #read a
-            v4l2-ctl --verbose  --stream-mmap --device=$videodev --stream-count=3
+            if ! timeout 5 v4l2-ctl --verbose --stream-mmap --device=$videodev --stream-count=3; then
+                echo "No image recorded for $videodev" | sudo tee /dev/kmsg
+            fi
             
                                    
            
