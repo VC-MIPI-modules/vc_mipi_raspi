@@ -3,7 +3,7 @@ mkdir -p build
 
 # Set version if not set
 if [ -z "$VERSION_DEB_PACKAGE" ]; then
-    export VERSION_DEB_PACKAGE="0.5.0"
+    export VERSION_DEB_PACKAGE="0.5.3"
 fi
 # Delete v from version
 export VERSION_DEB_PACKAGE=$(echo $VERSION_DEB_PACKAGE | sed 's/v//')

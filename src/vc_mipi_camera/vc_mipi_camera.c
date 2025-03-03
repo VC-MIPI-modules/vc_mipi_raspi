@@ -10,7 +10,7 @@
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-event.h>
 
-#define VERSION "0.5.0"
+#define VERSION "0.5.3"
 
 // --- Prototypes --------------------------------------------------------------
 static int vc_sd_s_power(struct v4l2_subdev *sd, int on);
@@ -78,6 +78,7 @@ static struct vc_control64 linkfreq  = {
 static        struct vc_control hblank; //TODO Check implementation
 static        struct vc_control vblank; //TODO Check implementation
 static        struct vc_control pixelrate; //TODO Check implementation
+static void update_frame_rate_ctrl(struct vc_cam *cam, struct vc_device *device);
 
 // --- v4l2_subdev_core_ops ---------------------------------------------------
 
@@ -244,6 +245,7 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
                 ret = vc_mod_set_mode(cam, &reset);
                 ret |= vc_sen_set_roi(cam);
                 ret |= vc_sen_set_exposure(cam, cam->state.exposure);
+                update_frame_rate_ctrl(cam,device);
                 if (!ret && reset)
                 {
                         ret |= vc_sen_set_gain(cam, cam->state.gain, false);
@@ -416,80 +418,49 @@ static struct v4l2_rect *__maybe_unused __cam_get_pad_crop(struct v4l2_subdev *s
         }
 }
 
-static int __maybe_unused vc_sd_get_selection(struct v4l2_subdev *sd,
-                                              struct v4l2_subdev_state *cfg,
-                                              struct v4l2_subdev_selection *sel)
+static int vc_sd_get_selection(struct v4l2_subdev *sd,
+                               struct v4l2_subdev_state *cfg,
+                               struct v4l2_subdev_selection *sel)
 {
-        struct vc_device *device __maybe_unused = to_vc_device(sd);
-        struct vc_cam *cam __maybe_unused = to_vc_cam(sd);
-
-        if (sel->target == V4L2_SEL_TGT_CROP_DEFAULT)
-                sel->r = *__cam_get_pad_crop(sd, cfg, sel->pad, sel->which);
+    struct vc_device *device = to_vc_device(sd);
+    struct vc_cam *cam = to_vc_cam(sd);
+    struct v4l2_rect r;
+    if (sel->target == V4L2_SEL_TGT_CROP_DEFAULT || sel->target == V4L2_SEL_TGT_CROP_BOUNDS) {
+        r.left = cam->ctrl.frame.left;
+        r.top = cam->ctrl.frame.top;
+        r.width = cam->ctrl.frame.width;
+        r.height = cam->ctrl.frame.height;
+        sel->r = r;
         return 0;
+    }
 
-        if (sel->target == V4L2_SEL_TGT_CROP_BOUNDS)
-                sel->r = *__cam_get_pad_crop(sd, cfg, sel->pad, sel->which);
-        return 0;
+    if (sel->target != V4L2_SEL_TGT_CROP)
+        return -EINVAL;
 
-        if (sel->target != V4L2_SEL_TGT_CROP)
-                return -EINVAL;
-
-        sel->r = *__cam_get_pad_crop(sd, cfg, sel->pad, sel->which);
-        return 0;
+    sel->r = device->crop_rect;
+    return 0;
 }
 
-static int __maybe_unused vc_sd_set_selection(struct v4l2_subdev *sd,
-                                              struct v4l2_subdev_state *cfg,
-                                              struct v4l2_subdev_selection *sel)
+static int vc_sd_set_selection(struct v4l2_subdev *sd,
+                               struct v4l2_subdev_state *cfg,
+                               struct v4l2_subdev_selection *sel)
 {
-        struct vc_device *device __maybe_unused = to_vc_device(sd);
-        struct vc_cam *cam = to_vc_cam(sd);
-        struct v4l2_mbus_framefmt *__format;
-        struct v4l2_rect *__crop;
-        struct v4l2_rect rect;
+    struct vc_device *device = to_vc_device(sd);
+    struct vc_cam *cam = to_vc_cam(sd);
+    struct v4l2_rect rect;
 
-        //      dev_info(&client->dev, "set_selection: pad=%u target=%u s\n",
-        //              sel->pad, sel->target);
+    if (sel->target != V4L2_SEL_TGT_CROP)
+        return -EINVAL;
 
-        //      if (sel->pad != 0)
-        //              return -EINVAL;
-        if (sel->target == V4L2_SEL_TGT_CROP_DEFAULT)
-                return 0;
+    rect.left = clamp_t(s32, ALIGN(sel->r.left, 2), 0, cam->ctrl.frame.width - 2);
+    rect.top = clamp_t(s32, ALIGN(sel->r.top, 2), 0, cam->ctrl.frame.height - 2);
+    rect.width = clamp_t(s32, ALIGN(sel->r.width, 2), 2, cam->ctrl.frame.width - rect.left);
+    rect.height = clamp_t(s32, ALIGN(sel->r.height, 2), 2, cam->ctrl.frame.height - rect.top);
 
-        if (sel->target == V4L2_SEL_TGT_CROP_BOUNDS)
-                return 0;
+    device->crop_rect = rect;
+    sel->r = rect;
 
-        if (sel->target != V4L2_SEL_TGT_CROP)
-                return -EINVAL;
-
-                /* Clamp the crop rectangle boundaries and align them to a multiple of 2
-                 * pixels.
-                 */
-#if 1
-        rect.left = clamp(ALIGN(sel->r.left, 2), (s32)cam->ctrl.frame.left, (s32)cam->ctrl.frame.width - 1);
-        rect.top = clamp(ALIGN(sel->r.top, 2), (s32)cam->ctrl.frame.top, (s32)cam->ctrl.frame.height - 1);
-        rect.width = clamp_t(unsigned int, ALIGN(sel->r.width, 2), 1, cam->ctrl.frame.width - rect.left);
-        rect.height = clamp_t(unsigned int, ALIGN(sel->r.height, 2), 1, cam->ctrl.frame.height - rect.top);
-
-        rect.width = min_t(unsigned int, rect.width, cam->ctrl.frame.width - rect.left);
-        rect.height = min_t(unsigned int, rect.height, cam->ctrl.frame.height - rect.top);
-#endif
-        __crop = __cam_get_pad_crop(sd, cfg, sel->pad, sel->which);
-
-        if (rect.width != __crop->width || rect.height != __crop->height)
-        {
-                /* Reset the output image size if the crop rectangle size has
-                 * been modified.
-                 */
-                __format = __cam_get_pad_format(sd, cfg, sel->pad, sel->which);
-                __format->width = rect.width;
-                __format->height = rect.height;
-        }
-
-        *__crop = rect;
-        sel->r = rect;
-
-        return 0;
+    return 0;
 }
 
 // --- v4l2_ctrl_ops ---------------------------------------------------
@@ -539,41 +510,7 @@ static int vc_get_bit_depth(__u8 mipi_format)
         return 0;
 }
 
-// MS update the clk_rates needed for libcamera
-static void vc_update_clk_rates(struct vc_cam *cam)
-{
-        int mode = cam->state.mode;
-        int num_lanes = cam->desc.modes[mode].num_lanes;
-        int bit_depth = vc_get_bit_depth(cam->desc.modes[mode].format);
 
-        // CAUTION: DDR rate is doubled freq
-        linkfreq.max = *(__u32 *)&(cam->desc.modes[mode].data_rate[0]) / 2;
-        linkfreq.def = linkfreq.max;
-        pixelrate.max = (linkfreq.max * 2 * num_lanes) / bit_depth;
-        pixelrate.def = pixelrate.max;
-
-#if 1 // TODO LC_IMX296_TEST // enable for TEST IMX296 with libcamera
-#define IMX296_PIXEL_ARRAY_WIDTH 1456
-#define IMX296_PIXEL_ARRAY_HEIGHT 1088
-#ifdef IMX296_PIXEL_ARRAY_WIDTH
-        /*
-         * Horizontal blanking is controlled through the HMAX register, which
-         * contains a line length in INCK clock units. The INCK frequency is
-         * fixed to 74.25 MHz. The HMAX value is currently fixed to 1100,
-         * convert it to a number of pixels based on the nominal pixel rate.
-         */
-        hblank.max = 1100 * 1188000000ULL / 10 / 74250000 - IMX296_PIXEL_ARRAY_WIDTH;
-        hblank.min = hblank.max;
-        hblank.def = hblank.max;
-        // TODO if (hblank_ctrl)
-        //          hblank_ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
-
-        vblank.min = 30;
-        vblank.max = 1048575 - IMX296_PIXEL_ARRAY_HEIGHT;
-        vblank.def = vblank.min;
-#endif
-#endif
-}
 
 // *** Initialisation *********************************************************
 
@@ -847,7 +784,77 @@ static const struct v4l2_ctrl_config ctrl_blacklevel = {
 };
 
 
+static struct v4l2_ctrl_config ctrl_hblank = {
+        .ops = &vc_ctrl_ops,
+        .id = V4L2_CID_HBLANK, 
+        .name = "Horizontal blanking",
+        .type = V4L2_CTRL_TYPE_INTEGER,
+        .flags = V4L2_CTRL_FLAG_READ_ONLY,
+        .min = 0,
+        .max = 100000,
+        .step = 1,
+        .def = 0,
+    };
+static struct v4l2_ctrl_config ctrl_vblank = {
+        .ops = &vc_ctrl_ops,
+        .id = V4L2_CID_VBLANK, 
+        .name = "Vertical blanking",
+        .type = V4L2_CTRL_TYPE_INTEGER,
+        .flags = V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+        .min = 0,
+        .max = 100000,
+        .step = 1,
+        .def = 0,
+    };
+
 #endif
+
+
+static void vc_update_clk_rates(struct vc_cam *cam)
+{
+        vc_mode *mode = &cam->ctrl.mode[cam->state.mode];
+        int num_lanes = mode->num_lanes;
+        int bit_depth = vc_get_bit_depth(mode->format);
+        linkfreq.max = 999 * 1000000ULL / 2;
+        linkfreq.def = linkfreq.max;
+        linkfreq.min = linkfreq.max;
+        pixelrate.max = cam->ctrl.clk_pixel * 2;
+        pixelrate.def = pixelrate.max;
+
+
+        vblank.min = mode->vmax.min ;
+        vblank.max = mode->vmax.max;
+        vblank.def = mode->vmax.min;
+
+       
+
+        ctrl_vblank.min = vblank.min;
+        ctrl_vblank.max = vblank.max;
+        ctrl_vblank.def = vblank.def;
+
+        hblank.min = mode->hmax;
+        hblank.max = hblank.min;
+        hblank.def = hblank.min;
+
+
+        ctrl_hblank.max = hblank.min;
+        ctrl_hblank.min = hblank.min;
+        ctrl_hblank.def = hblank.min;
+}
+static void update_frame_rate_ctrl(struct vc_cam *cam, struct vc_device *device)
+{
+        struct v4l2_ctrl *ctrl = v4l2_ctrl_find(&device->ctrl_handler, V4L2_CID_VC_FRAME_RATE);
+        if (ctrl)
+        {
+                struct v4l2_ctrl *ctrl = v4l2_ctrl_find(&device->ctrl_handler, V4L2_CID_VC_FRAME_RATE);
+                if (ctrl)
+                {
+                        ctrl->maximum = cam->ctrl.framerate.max;
+                        ctrl->minimum = cam->ctrl.framerate.min;
+                        ctrl->default_value = cam->ctrl.framerate.def;
+                }
+        }
+}
 static int vc_sd_init(struct vc_device *device)
 {
         struct i2c_client *client = device->cam.ctrl.client_sen;
@@ -867,6 +874,9 @@ static int vc_sd_init(struct vc_device *device)
         // Hook the control handler into the driver
         device->sd.ctrl_handler = &device->ctrl_handler;
 
+        vc_update_clk_rates(&device->cam);
+
+
         // Add controls
         ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_EXPOSURE, &device->cam.ctrl.exposure);
         ret |= vc_ctrl_init_ctrl_special(device, &device->ctrl_handler, V4L2_CID_GAIN, 
@@ -881,12 +891,11 @@ static int vc_sd_init(struct vc_device *device)
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_single_trigger);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_binning_mode);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_roi_position);
-        // MS these are mandadory for libcamera:
-        // vc_update_clk_rates(&device->cam); // TODO seek suitable place for function
+
         ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_PIXEL_RATE, &pixelrate);
         ret |= vc_ctrl_init_ctrl_lfreq(device, &device->ctrl_handler, V4L2_CID_LINK_FREQ, &linkfreq);
-        // ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_HBLANK, &device->cam.ctrl.hblank);
-        // ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_VBLANK, &device->cam.ctrl.vblank);
+        ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_hblank);
+        ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_vblank);
         // ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_ANALOGUE_GAIN, &device->cam.ctrl.gain);
         ret |= vc_ctrl_init_ctrl_lc(device, &device->ctrl_handler);
                 // Set the standard format
