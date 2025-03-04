@@ -1,9 +1,8 @@
 # Frame rate
-Adds an offset to the image output by setting
 ```shell
 v4l2-ctl -c frame_rate=<value> -d <subdevice>
 #Example 10 fps(Hz) for first camera
-v4l2-ctl -c black_level=10000 -d /dev/v4l-subdev2
+v4l2-ctl -c frame_rate=10000 -d /dev/v4l-subdev2
 ```
 The range is from 0 to maximum from the sensor and the configuration. 
 
