@@ -77,7 +77,7 @@ static struct vc_control64 linkfreq  = {
 };
 static        struct vc_control hblank; //TODO Check implementation
 static        struct vc_control vblank; //TODO Check implementation
-static        struct vc_control pixelrate; //TODO Check implementation
+static        struct vc_control pixel_rate; //TODO Check implementation
 static void update_frame_rate_ctrl(struct vc_cam *cam, struct vc_device *device);
 
 // --- v4l2_subdev_core_ops ---------------------------------------------------
@@ -812,14 +812,28 @@ static struct v4l2_ctrl_config ctrl_vblank = {
 
 static void vc_update_clk_rates(struct vc_cam *cam)
 {
-        vc_mode *mode = &cam->ctrl.mode[cam->state.mode];
+        struct vc_desc_mode *mode_desc = &cam->desc.modes[cam->state.mode];
+
+        vc_mode *mode;
+
+        for(int i = 0; i < MAX_VC_DESC_MODES; i++) //TODO Replace 24 by define
+        {
+                if(mode_desc->format == cam->ctrl.mode[i].format && 
+                        mode_desc->num_lanes == cam->ctrl.mode[i].num_lanes && 
+                        mode_desc->binning == cam->ctrl.mode[i].binning)
+                {
+                        mode = &cam->ctrl.mode[i];
+                        break;
+                }
+        }
         int num_lanes = mode->num_lanes;
         int bit_depth = vc_get_bit_depth(mode->format);
-        linkfreq.max = 999 * 1000000ULL / 2;
+
+        linkfreq.max = (unsigned long long)(cam->ctrl.clk_pixel) * bit_depth;
         linkfreq.def = linkfreq.max;
         linkfreq.min = linkfreq.max;
-        pixelrate.max = cam->ctrl.clk_pixel * 2;
-        pixelrate.def = pixelrate.max;
+        pixel_rate.max = cam->ctrl.clk_pixel * 2 * num_lanes; //DDR Double Data Rate
+        pixel_rate.def = pixel_rate.max;
 
 
         vblank.min = mode->vmax.min ;
@@ -832,7 +846,7 @@ static void vc_update_clk_rates(struct vc_cam *cam)
         ctrl_vblank.max = vblank.max;
         ctrl_vblank.def = vblank.def;
 
-        hblank.min = mode->hmax;
+        hblank.min = mode->hmax * num_lanes * 2 - cam->state.frame.width ;
         hblank.max = hblank.min;
         hblank.def = hblank.min;
 
@@ -845,14 +859,11 @@ static void update_frame_rate_ctrl(struct vc_cam *cam, struct vc_device *device)
 {
         struct v4l2_ctrl *ctrl = v4l2_ctrl_find(&device->ctrl_handler, V4L2_CID_VC_FRAME_RATE);
         if (ctrl)
-        {
-                struct v4l2_ctrl *ctrl = v4l2_ctrl_find(&device->ctrl_handler, V4L2_CID_VC_FRAME_RATE);
-                if (ctrl)
-                {
-                        ctrl->maximum = cam->ctrl.framerate.max;
-                        ctrl->minimum = cam->ctrl.framerate.min;
-                        ctrl->default_value = cam->ctrl.framerate.def;
-                }
+        {              
+                ctrl->maximum = cam->ctrl.framerate.max;
+                ctrl->minimum = cam->ctrl.framerate.min;
+                ctrl->default_value = cam->ctrl.framerate.def;
+                ctrl->val = cam->state.framerate;                
         }
 }
 static int vc_sd_init(struct vc_device *device)
@@ -892,7 +903,7 @@ static int vc_sd_init(struct vc_device *device)
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_binning_mode);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_roi_position);
 
-        ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_PIXEL_RATE, &pixelrate);
+        ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_PIXEL_RATE, &pixel_rate);
         ret |= vc_ctrl_init_ctrl_lfreq(device, &device->ctrl_handler, V4L2_CID_LINK_FREQ, &linkfreq);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_hblank);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_vblank);
@@ -920,114 +931,6 @@ static int vc_sd_init(struct vc_device *device)
         return 0;
 }
 
-#if 1 // MS from old imx driver read DT props //TODO integrate in the new driver
-struct imx_dtentry
-{
-        u32 sensor_mode;
-        u32 data_lanes;
-        u32 io_config;
-        s64 linkfreq;
-        u32 enable_extrig;
-        u32 sen_clk;
-};
-#define NULL_imx_dtentry {0, 0, 0, 0, 0}
-
-// static int vc_rpi_devicetree_read(struct i2c_client *client, struct imx_dtentry *dtentry)
-// {
-//         struct device_node *endpoint;
-//         struct device_node *node;
-//         const __be32 *prop; // property is defined as big endian integer
-//         int len;            // property len is sizeof(u32)
-
-//         /*
-//          * read config-io and sensor_mode property
-//          */
-
-//         node = (&client->dev)->of_node;
-
-//         if (!node)
-//         {
-//                 dev_err(&client->dev, "device node not found\n");
-//                 return -EINVAL;
-//         }
-
-//         prop = of_get_property(node, "io-config", &len); // read property from device node
-
-//         if (prop && len == sizeof(u32))
-//         {
-//                 dtentry->io_config = be32_to_cpu(prop[0]);
-//                 dev_info(&client->dev, "read property io-config = %d\n", dtentry->io_config);
-//         }
-
-//         prop = of_get_property(node, "external-trigger-mode-overwrite", &len); // read property from device node
-
-//         if (prop && len == sizeof(u32))
-//         {
-//                 dtentry->enable_extrig = be32_to_cpu(prop[0]); // set ext trig source to pin=1 or selftriggered=4;
-//                 dev_info(&client->dev, "read property external-trigger-mode-overwrite = %d\n", dtentry->enable_extrig);
-//         }
-//         else
-//         {
-
-//                 prop = of_get_property(node, "external-trigger-mode", &len); // read property from device node
-
-//                 if (prop && len == sizeof(u32))
-//                 {
-//                         dtentry->enable_extrig = be32_to_cpu(prop[0]); // set ext trig source to pin=1 or selftriggered=4;
-//                         dev_info(&client->dev, "read property external-trigger-mode = %d\n", dtentry->enable_extrig);
-//                 }
-//                 else
-//                         dtentry->enable_extrig = 1; // set ext trig source to pin=1 as fallback
-//         }
-
-//         prop = of_get_property(node, "sensor-mode", &len); // read property from device node
-
-//         if (prop && len == sizeof(u32))
-//         {
-//                 dtentry->sensor_mode = be32_to_cpu(prop[0]); // read property sensor_mode
-//                 dev_info(&client->dev, "read property sensor-mode = %d\n", dtentry->sensor_mode);
-//         }
-
-//         node = of_get_child_by_name((&client->dev)->of_node, "camera-clk");
-//         if (!node)
-//         {
-//                 dev_err(&client->dev, "child 'camera-clk' in DT not found\n");
-//         }
-//         else
-//         {
-
-//                 prop = of_get_property(node, "clock-frequency", &len); // read property from device node
-
-//                 if (prop && len == sizeof(u32))
-//                 {
-//                         dtentry->sen_clk = be32_to_cpu(prop[0]); // set sensor oscillator clock in HZ normal=54Mhz IMX183=72Mhz
-//                         dev_info(&client->dev, "read property clock-frequency = %d\n", dtentry->sen_clk);
-//                 }
-//                 of_node_put(node);
-//         }
-
-//         /*
-//          * read data-lanes and link-frequencies property
-//          */
-
-//         endpoint = of_graph_get_next_endpoint((&client->dev)->of_node, NULL);
-//         if (!endpoint)
-//         {
-//                 dev_err(&client->dev, "endpoint node not found\n");
-//                 return -EINVAL;
-//         }
-
-//         dtentry->data_lanes = fwnode_property_read_u32_array(of_fwnode_handle(endpoint), "data-lanes", NULL, 0);
-//         if (dtentry->data_lanes) // number of entries in data-lanes property
-//                 dev_info(&client->dev, "read property data-lanes = %d\n", dtentry->data_lanes);
-
-//         len = fwnode_property_read_u64_array(of_fwnode_handle(endpoint), "link-frequencies", &(dtentry->linkfreq), 1);
-//         if (!len) // first link-frequency in property array found
-//                 dev_info(&client->dev, "read property link-frequencies[0] = %lld\n", dtentry->linkfreq);
-
-//         return 0;
-// }
-#endif
 
 static int vc_link_setup(struct media_entity *entity, const struct media_pad *local, const struct media_pad *remote,
                          __u32 flags)

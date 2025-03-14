@@ -7,6 +7,7 @@
 #include <linux/v4l2-mediabus.h>
 #include  <linux/kernel.h>
 #include "vc_mipi_modules.h"
+#include <linux/moduleparam.h>
 
 // #define READ_DEFAULT_REG_VALUES
 
@@ -2255,4 +2256,13 @@ int vc_sen_set_exposure(struct vc_cam *cam, int exposure_us)
 }
 EXPORT_SYMBOL(vc_sen_set_exposure);
 
+#ifdef MODULE
+module_param(debug, int, 0644);
+MODULE_PARM_DESC(debug, "Debug level (0-6)");
+
 MODULE_LICENSE("GPL v2");
+MODULE_AUTHOR("Florian Schmid");
+MODULE_DESCRIPTION("VC MIPI Core Module");
+MODULE_VERSION("1.0");
+MODULE_INFO(name, "vc_mipi_core");
+#endif

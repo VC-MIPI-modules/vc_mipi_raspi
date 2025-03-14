@@ -56,6 +56,7 @@ int debug = 3; // FS Workaround
 #define MAX_BINNING_MODE_REGS           16
 
 #define MAX_MBUS_CODES                  5
+#define MAX_VC_DESC_MODES               24
 
 struct vc_desc_mode {
         __u8 data_rate[4];
@@ -106,7 +107,7 @@ struct vc_desc {
         // Modes
         __u16 num_modes;
         __u16 bytes_per_mode;
-        struct vc_desc_mode modes[24];
+        struct vc_desc_mode modes[MAX_VC_DESC_MODES];
 };
 
 typedef struct vc_control {
