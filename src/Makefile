@@ -56,25 +56,44 @@ overlays/%.dtbo: overlays/%.dts
 overlays/vc-mipi-bcm2712-cam0.dtbo: overlays/vc-mipi-bcm2712-cam0-overlay.dts
 	dtc -W no-unit_address_vs_reg -@ -I dts -O dtb  -o $@  $<
 
+KERNEL_HEADERS := /home/vc/linux
+
+# Debug information
+$(info KERNEL_HEADERS=$(KERNEL_HEADERS))
+$(info Checking for required files in $(KERNEL_HEADERS)...)
+
+# Check for required files
+REQUIRED_FILES := scripts/Makefile.build scripts/basic/Makefile include/config/auto.conf.cmd
+MISSING_FILES := $(foreach file,$(REQUIRED_FILES),$(if $(wildcard $(KERNEL_HEADERS)/$(file)),,$(file)))
+
+ifeq ($(MISSING_FILES),)
+$(info All required files are present.)
+else
+endif
+
+ifeq ($(wildcard $(KERNEL_HEADERS)),)
+$(error Kernel headers not found. Please install them with 'sudo apt-get install raspberrypi-kernel-headers')
+endif
+
 build:
 	$(MAKE) -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
 
 all: $(DEVICETREES) build
 
 clean:
-	$(MAKE) -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
+	$(MAKE) -C $(KERNEL_HEADERS) M=$(PWD) clean
 	-rm -f $(SENSORDRIVERS)
 	-rm -f $(DEVICETREES)
 
 reload:
 	-sudo modprobe -r bcm2835-unicam
-	-sudo modprobe -r rp1_cfe
+	-sudo modprobe -r rp1_cfe 
 	-sudo modprobe -r vc_mipi_camera
 	-sudo modprobe -r vc_mipi_modules
 	-sudo modprobe -r vc_mipi_core
 
 	-sudo modprobe bcm2835-unicam
-	-sudo modprobe rp1_cfe
+	-sudo modprobe rp1_cfe verbose_debug=1
 	-sudo modprobe vc_mipi_core
 	-sudo modprobe vc_mipi_modules
 	-sudo modprobe vc_mipi_camera
@@ -90,14 +109,14 @@ install: all
 	sudo install -p -m 644  $(SENSORDRIVERS)	/lib/modules/$(shell uname -r)/kernel/drivers/media/i2c/
 	sudo install -p -m 644  $(DEVICETREES)	 $(BOOT_OVERLAYS_DIR)/
 	sudo /sbin/depmod -a $(shell uname -r)
-	@echo "--------------------------------------"
-	@echo
-	@echo "  Call  debian/postinst  for copying and activating the configuration file"
-	@echo "  /boot/config_vc-mipi-driver-bcm2712.txt"
-	@echo "  Edit the configuration file so that it fits your setup."
-	@echo
-	@echo "--------------------------------------"
-
+	sudo cp overlays/*.txt /boot/firmware/
+	sudo mkdir -p /usr/local/bin
+	sudo cp set_rpi5_pipeline.sh /usr/local/bin
+	sudo chmod +x /usr/local/bin/set_rpi5_pipeline.sh
+	sudo cp 99-camera-setup.rules /etc/udev/rules.d/
+	sudo cp vc-config /usr/local/bin/
+	sudo chmod +x /usr/local/bin/vc-config
+	grep -qxF "include config_vc-mipi-driver-bcm2712.txt" /boot/firmware/config.txt || echo "include config_vc-mipi-driver-bcm2712.txt" | sudo tee -a /boot/firmware/config.txt
 uninstall:
 	sudo rm -f $(foreach sentype,$(SENSOR_NAMES),$(KERNEL_I2C_DIR)/$(sentype).ko)
 	sudo rm -f $(foreach sencommon,$(SENSOR_DRIVER),$(KERNEL_I2C_DIR)/$(sencommon).ko)
