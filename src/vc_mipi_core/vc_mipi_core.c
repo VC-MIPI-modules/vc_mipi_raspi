@@ -1624,7 +1624,7 @@ static int vc_sen_write_hmax(struct vc_ctrl *ctrl, __u32 hmax)
         return i2c_write_reg4(dev, client, &ctrl->csr.sen.hmax, hmax, __FUNCTION__);
 }
 
-static int vc_sen_set_hmax(struct vc_cam *cam)
+int vc_sen_set_hmax(struct vc_cam *cam)
 {
         struct vc_ctrl *ctrl = &cam->ctrl;
         struct vc_state *state = &cam->state;
@@ -1637,9 +1637,16 @@ static int vc_sen_set_hmax(struct vc_cam *cam)
         if (cam->state.hmax_overwrite < 0) {
                 return 0;
         }
+        else if (cam->state.hmax_overwrite > 0)
+        {
+                printk("Overwrite HMAX with %d\n", cam->state.hmax_overwrite);
+                return vc_sen_write_hmax(ctrl, cam->state.hmax_overwrite);
+        }
+        
 #endif
         return vc_sen_write_hmax(ctrl, hmax);
 }
+EXPORT_SYMBOL(vc_sen_set_hmax);
 
 int vc_sen_set_roi(struct vc_cam *cam)
 {
@@ -1709,7 +1716,26 @@ int vc_sen_set_roi(struct vc_cam *cam)
 }
 EXPORT_SYMBOL(vc_sen_set_roi);
 
-static int vc_sen_write_vmax(struct vc_ctrl *ctrl, __u32 vmax)
+struct v4l2_rect vc_sen_get_roi(struct vc_cam *cam)
+{
+        int w_left, w_top, w_right, w_bottom, w_width, w_height, o_width, o_height;
+        int ret = 0;
+        
+
+        vc_core_calculate_roi(cam, &w_left, &w_right, &w_width, &w_top, &w_bottom, &w_height, &o_width, &o_height);
+
+        struct v4l2_rect rect = {
+                .left = w_left,
+                .top = w_top,
+                .width = w_width,
+                .height = w_height
+        };
+        return rect;
+
+}
+EXPORT_SYMBOL(vc_sen_get_roi);
+
+int vc_sen_write_vmax(struct vc_ctrl *ctrl, __u32 vmax)
 {
         struct i2c_client *client = ctrl->client_sen;
         struct device *dev = &client->dev;
@@ -1718,6 +1744,7 @@ static int vc_sen_write_vmax(struct vc_ctrl *ctrl, __u32 vmax)
 
         return i2c_write_reg4(dev, client, &ctrl->csr.sen.vmax, vmax, __FUNCTION__);
 }
+EXPORT_SYMBOL(vc_sen_write_vmax);
 
 static int vc_sen_write_shs(struct vc_ctrl *ctrl, __u32 shs)
 {
@@ -2232,7 +2259,7 @@ int vc_sen_set_exposure(struct vc_cam *cam, int exposure_us)
                 case REG_TRIGGER_STREAM_LEVEL:
                         vc_calculate_exposure(cam, exposure_us);
                         ret |= vc_sen_write_shs(ctrl, state->shs);
-                        ret |= vc_sen_write_vmax(ctrl, state->vmax);
+                        ret |= vc_sen_write_vmax(ctrl, state->vmax_overwrite);
                 }
         
         } else if (ctrl->flags & FLAG_EXPOSURE_OMNIVISION) {
