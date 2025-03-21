@@ -7,6 +7,7 @@
 #include <linux/v4l2-mediabus.h>
 #include  <linux/kernel.h>
 #include "vc_mipi_modules.h"
+#include <linux/moduleparam.h>
 
 // #define READ_DEFAULT_REG_VALUES
 
@@ -350,18 +351,18 @@ struct device *vc_core_get_mod_device(struct vc_cam *cam)
 static int vc_core_fmt_to_str(__u32 code, char *buf)
 {
         switch(code) {
-                        case MEDIA_BUS_FMT_Y8_1X8:       sprintf(buf, "Y8_1X8"); break;
-                        case MEDIA_BUS_FMT_Y10_1X10:     sprintf(buf, "Y10_1X10"); break;
-                        case MEDIA_BUS_FMT_Y12_1X12:     sprintf(buf, "Y12_1X12"); break;
-                        case MEDIA_BUS_FMT_Y14_1X14:     sprintf(buf, "Y14_1X14"); break;
-                        case MEDIA_BUS_FMT_SRGGB8_1X8:   sprintf(buf, "SRGGB8_1X8"); break;
-                        case MEDIA_BUS_FMT_SRGGB10_1X10: sprintf(buf, "SRGGB10_1X10"); break;
-                        case MEDIA_BUS_FMT_SRGGB12_1X12: sprintf(buf, "SRGGB12_1X12"); break;
-                        case MEDIA_BUS_FMT_SRGGB14_1X14: sprintf(buf, "SRGGB14_1X14"); break;
-                        case MEDIA_BUS_FMT_SGBRG8_1X8:   sprintf(buf, "SGBRG8_1X8"); break;
-                        case MEDIA_BUS_FMT_SGBRG10_1X10: sprintf(buf, "SGBRG10_1X10"); break;
-                        case MEDIA_BUS_FMT_SGBRG12_1X12: sprintf(buf, "SGBRG12_1X12"); break;
-                        case MEDIA_BUS_FMT_SGBRG14_1X14: sprintf(buf, "SGBRG14_1X14"); break;
+                        case MEDIA_BUS_FMT_Y8_1X8:       sprintf(buf, "Y8_1X8       "); break;
+                        case MEDIA_BUS_FMT_Y10_1X10:     sprintf(buf, "Y10_1X10     "); break;
+                        case MEDIA_BUS_FMT_Y12_1X12:     sprintf(buf, "Y12_1X12     "); break;
+                        case MEDIA_BUS_FMT_Y14_1X14:     sprintf(buf, "Y14_1X14     "); break;
+                        case MEDIA_BUS_FMT_SRGGB8_1X8:   sprintf(buf, "SRGGB8_1X8   "); break;
+                        case MEDIA_BUS_FMT_SRGGB10_1X10: sprintf(buf, "SRGGB10_1X10 "); break;
+                        case MEDIA_BUS_FMT_SRGGB12_1X12: sprintf(buf, "SRGGB12_1X12 "); break;
+                        case MEDIA_BUS_FMT_SRGGB14_1X14: sprintf(buf, "SRGGB14_1X14 "); break;
+                        case MEDIA_BUS_FMT_SGBRG8_1X8:   sprintf(buf, "SGBRG8_1X8   "); break;
+                        case MEDIA_BUS_FMT_SGBRG10_1X10: sprintf(buf, "SGBRG10_1X10 "); break;
+                        case MEDIA_BUS_FMT_SGBRG12_1X12: sprintf(buf, "SGBRG12_1X12 "); break;
+                        case MEDIA_BUS_FMT_SGBRG14_1X14: sprintf(buf, "SGBRG14_1X14 "); break;
                         default: return -EINVAL;
                 }
         return 0;
@@ -587,7 +588,7 @@ int vc_core_try_format(struct vc_cam *cam, __u32 code)
         struct vc_desc *desc = &cam->desc;
         struct device *dev = vc_core_get_sen_device(cam);
         __u8 format = vc_core_mbus_code_to_format(code);
-        char fourcc[5];
+        char fourcc[14];
         int index;
 
         vc_core_fmt_to_str(code, fourcc);
@@ -608,7 +609,7 @@ int vc_core_set_format(struct vc_cam *cam, __u32 code)
 {
         struct vc_state *state = &cam->state;
         struct device *dev = vc_core_get_sen_device(cam);
-        char fourcc[5];
+        char fourcc[14];
 
         vc_core_fmt_to_str(code, fourcc);
         vc_notice(dev, "%s(): Set format: 0x%04x (%s)\n", __FUNCTION__, code, fourcc);
@@ -632,7 +633,7 @@ __u32 vc_core_get_format(struct vc_cam *cam)
         struct vc_state *state = &cam->state;
         struct device *dev = vc_core_get_sen_device(cam);
         __u32 code = state->format_code;
-        char fourcc[5];
+        char fourcc[14];
 
         vc_core_fmt_to_str(code, fourcc);
         vc_notice(dev, "%s(): Get format: 0x%04x (%s)\n", __FUNCTION__, code, fourcc);
@@ -1273,7 +1274,7 @@ int vc_mod_set_mode(struct vc_cam *cam, int *reset)
         struct device *dev = vc_core_get_mod_device(cam);
         __u8 num_lanes = state->num_lanes;
         __u8 format = vc_core_mbus_code_to_format(state->format_code);
-        char fourcc[5];
+        char fourcc[14];
         char *stype;
         __u8 type = 0;
         __u8 binning = 0;
@@ -2282,4 +2283,13 @@ int vc_sen_set_exposure(struct vc_cam *cam, int exposure_us)
 }
 EXPORT_SYMBOL(vc_sen_set_exposure);
 
+#ifdef MODULE
+module_param(debug, int, 0644);
+MODULE_PARM_DESC(debug, "Debug level (0-6)");
+
 MODULE_LICENSE("GPL v2");
+MODULE_AUTHOR("Florian Schmid");
+MODULE_DESCRIPTION("VC MIPI Core Module");
+MODULE_VERSION("1.0");
+MODULE_INFO(name, "vc_mipi_core");
+#endif

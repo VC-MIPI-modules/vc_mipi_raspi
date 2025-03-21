@@ -3,14 +3,14 @@
 #include <linux/gpio/consumer.h>
 #include <linux/pm_runtime.h>
 #include <linux/version.h>
+#include <linux/of_graph.h> 
 
-#include <linux/of_graph.h> //MS
 #include <media/v4l2-subdev.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-event.h>
 
-#define VERSION "0.2.1"
+#define VERSION "0.5.3"
 
 // --- Prototypes --------------------------------------------------------------
 static int vc_sd_s_power(struct v4l2_subdev *sd, int on);
@@ -102,6 +102,23 @@ static struct vc_control64 linkfreq  = {
 
 static void update_frame_rate_ctrl(struct vc_cam *cam, struct vc_device *device);
 
+vc_mode* vc_core_get_mode_by_state(struct vc_cam *cam)
+{
+
+        struct vc_desc_mode *mode_desc = &cam->desc.modes[cam->state.mode];
+
+        for(int i = 0; i < MAX_VC_DESC_MODES; i++)
+        {
+                if(mode_desc->format == cam->ctrl.mode[i].format && 
+                        mode_desc->num_lanes == cam->ctrl.mode[i].num_lanes && 
+                        mode_desc->binning == cam->ctrl.mode[i].binning)
+                {
+                        return &cam->ctrl.mode[i];
+                }
+        }
+        return NULL;
+}
+
 // --- v4l2_subdev_core_ops ---------------------------------------------------
 
 static void vc_set_power(struct vc_device *device, int on)
@@ -173,7 +190,19 @@ static int __maybe_unused vc_resume(struct device *dev)
         return 0;
 }
 
+static unsigned long vc_calculate_line_duration(struct vc_cam *cam)
+{       
+        __u64 line_duration_ns = 0;
+        vc_mode *mode = vc_core_get_mode_by_state(cam);
+        if(mode == NULL)
+        {
+                return 0;
+        }        __u64 hmax = cam->state.hmax_overwrite == 0 ?  mode->hmax : cam->state.hmax_overwrite ;
 
+        line_duration_ns = (hmax * 1000000000) / cam->ctrl.clk_pixel;
+
+        return line_duration_ns;
+}
 
 static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
 {
@@ -195,13 +224,14 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
                 
         case V4L2_CID_VBLANK:
                 vc_core_set_vmax_overwrite(cam,(cam->state.frame.height + control->value));
-                vc_sen_write_vmax(&cam->ctrl, cam->state.vmax_overwrite);
+                return vc_sen_write_vmax(&cam->ctrl, cam->state.vmax_overwrite);
         case V4L2_CID_HFLIP:
         case V4L2_CID_VFLIP:
                 return 0; // TODO
 
         case V4L2_CID_EXPOSURE:
-                return vc_sen_set_exposure(cam, control->value);
+                return vc_sen_set_exposure(cam, (control->value * vc_calculate_line_duration(cam) )/ 1000);
+
 
         case V4L2_CID_ANALOGUE_GAIN:
         case V4L2_CID_GAIN:
@@ -267,9 +297,12 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
 
                 ret = vc_mod_set_mode(cam, &reset);
                 ret |= vc_sen_set_roi(cam);
+
+                ret |= vc_sen_set_exposure(cam, cam->state.exposure  );
+
+                update_frame_rate_ctrl(cam,device);
                 if (!ret && reset)
                 {
-                        ret |= vc_sen_set_exposure(cam, cam->state.exposure);
                         ret |= vc_sen_set_gain(cam, cam->state.gain, false);
                         ret |= vc_sen_set_blacklevel(cam, cam->state.blacklevel);
                 }
@@ -340,7 +373,6 @@ static int vc_sd_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state
 
 int vc_sd_enum_mbus_code(struct v4l2_subdev *sd, struct v4l2_subdev_state *state, struct v4l2_subdev_mbus_code_enum *code)
 {
-        struct vc_device *device = to_vc_device(sd);
         struct vc_cam *cam = to_vc_cam(sd);
         int i;
         for(i = 0; i < MAX_MBUS_CODES; i++)
@@ -356,12 +388,17 @@ int vc_sd_enum_mbus_code(struct v4l2_subdev *sd, struct v4l2_subdev_state *state
 			return -EINVAL;
 
 		code->code = cam->ctrl.mbus_codes[code->index];
+                printk(KERN_INFO "vc_sd_enum_mbus_code: code->code: %d\n", code->code);
+
 	} else {
 		if (code->index > 0)
 			return -EINVAL;
 
 		code->code = MEDIA_BUS_FMT_SENSOR_DATA;
+                printk(KERN_INFO "vc_sd_enum_mbus_code: code->code: MEDIA_BUS_FMT_SENSOR_DATA\n" );
+
 	}
+
 
         return 0;
 
@@ -395,7 +432,6 @@ int vc_sd_enum_frame_size(struct v4l2_subdev *sd, struct v4l2_subdev_state *cfg,
         }
 
         // Frame sizes are the same for different formats
-        // TODO Adjust for binning mode 
 
         fse->min_width = cam->ctrl.frame.width;
         fse->max_width = fse->min_width;
@@ -475,16 +511,17 @@ static int vc_sd_get_selection(struct v4l2_subdev *sd,
                                struct v4l2_subdev_state *cfg,
                                struct v4l2_subdev_selection *sel)
 {
-        struct vc_device *device __maybe_unused = to_vc_device(sd);
-        struct vc_cam *cam __maybe_unused = to_vc_cam(sd);
-
-        if (sel->target == V4L2_SEL_TGT_CROP_DEFAULT)
-                sel->r = *__cam_get_pad_crop(sd, cfg, sel->pad, sel->which);
+    struct vc_device *device = to_vc_device(sd);
+    struct vc_cam *cam = to_vc_cam(sd);
+    struct v4l2_rect r;
+    if (sel->target == V4L2_SEL_TGT_CROP_DEFAULT || sel->target == V4L2_SEL_TGT_CROP_BOUNDS) {
+        r.left = cam->ctrl.frame.left;
+        r.top = cam->ctrl.frame.top;
+        r.width = cam->ctrl.frame.width;
+        r.height = cam->ctrl.frame.height;
+        sel->r = r;
         return 0;
-
-        if (sel->target == V4L2_SEL_TGT_CROP_BOUNDS)
-                sel->r = *__cam_get_pad_crop(sd, cfg, sel->pad, sel->which);
-        return 0;
+    }
 
     if (sel->target != V4L2_SEL_TGT_CROP)
              
@@ -500,58 +537,26 @@ static int vc_sd_get_selection(struct v4l2_subdev *sd,
     return 0;
 }
 
-static int __maybe_unused vc_sd_set_selection(struct v4l2_subdev *sd,
-                                              struct v4l2_subdev_state *cfg,
-                                              struct v4l2_subdev_selection *sel)
+static int vc_sd_set_selection(struct v4l2_subdev *sd,
+                               struct v4l2_subdev_state *cfg,
+                               struct v4l2_subdev_selection *sel)
 {
-        struct vc_device *device __maybe_unused = to_vc_device(sd);
-        struct vc_cam *cam = to_vc_cam(sd);
-        struct v4l2_mbus_framefmt *__format;
-        struct v4l2_rect *__crop;
-        struct v4l2_rect rect;
+    struct vc_device *device = to_vc_device(sd);
+    struct vc_cam *cam = to_vc_cam(sd);
+    struct v4l2_rect rect;
 
-        //      dev_info(&client->dev, "set_selection: pad=%u target=%u s\n",
-        //              sel->pad, sel->target);
+    if (sel->target != V4L2_SEL_TGT_CROP)
+        return -EINVAL;
 
-        //      if (sel->pad != 0)
-        //              return -EINVAL;
-        if (sel->target == V4L2_SEL_TGT_CROP_DEFAULT)
-                return 0;
+    rect.left = clamp_t(s32, ALIGN(sel->r.left, 2), 0, cam->ctrl.frame.width - 2);
+    rect.top = clamp_t(s32, ALIGN(sel->r.top, 2), 0, cam->ctrl.frame.height - 2);
+    rect.width = clamp_t(s32, ALIGN(sel->r.width, 2), 2, cam->ctrl.frame.width - rect.left);
+    rect.height = clamp_t(s32, ALIGN(sel->r.height, 2), 2, cam->ctrl.frame.height - rect.top);
 
-        if (sel->target == V4L2_SEL_TGT_CROP_BOUNDS)
-                return 0;
+    device->crop_rect = rect;
+    sel->r = rect;
 
-        if (sel->target != V4L2_SEL_TGT_CROP)
-                return -EINVAL;
-
-                /* Clamp the crop rectangle boundaries and align them to a multiple of 2
-                 * pixels.
-                 */
-#if 1
-        rect.left = clamp(ALIGN(sel->r.left, 2), (s32)cam->ctrl.frame.left, (s32)cam->ctrl.frame.width - 1);
-        rect.top = clamp(ALIGN(sel->r.top, 2), (s32)cam->ctrl.frame.top, (s32)cam->ctrl.frame.height - 1);
-        rect.width = clamp_t(unsigned int, ALIGN(sel->r.width, 2), 1, cam->ctrl.frame.width - rect.left);
-        rect.height = clamp_t(unsigned int, ALIGN(sel->r.height, 2), 1, cam->ctrl.frame.height - rect.top);
-
-        rect.width = min_t(unsigned int, rect.width, cam->ctrl.frame.width - rect.left);
-        rect.height = min_t(unsigned int, rect.height, cam->ctrl.frame.height - rect.top);
-#endif
-        __crop = __cam_get_pad_crop(sd, cfg, sel->pad, sel->which);
-
-        if (rect.width != __crop->width || rect.height != __crop->height)
-        {
-                /* Reset the output image size if the crop rectangle size has
-                 * been modified.
-                 */
-                __format = __cam_get_pad_format(sd, cfg, sel->pad, sel->which);
-                __format->width = rect.width;
-                __format->height = rect.height;
-        }
-
-        *__crop = rect;
-        sel->r = rect;
-
-        return 0;
+    return 0;
 }
 
 // --- v4l2_ctrl_ops ---------------------------------------------------
@@ -601,54 +606,11 @@ static int vc_get_bit_depth(__u8 mipi_format)
         return 0;
 }
 
-// MS update the clk_rates needed for libcamera
-static void vc_update_clk_rates(struct vc_cam *cam)
-{
-        int mode = cam->state.mode;
-        int num_lanes = cam->desc.modes[mode].num_lanes;
-        int bit_depth = vc_get_bit_depth(cam->desc.modes[mode].format);
 
-        // CAUTION: DDR rate is doubled freq
-        linkfreq.max = *(__u32 *)&(cam->desc.modes[mode].data_rate[0]) / 2;
-        linkfreq.def = linkfreq.max;
-        pixelrate.max = (linkfreq.max * 2 * num_lanes) / bit_depth;
-        pixelrate.def = pixelrate.max;
-
-#if 1 // TODO LC_IMX296_TEST // enable for TEST IMX296 with libcamera
-#define IMX296_PIXEL_ARRAY_WIDTH 1456
-#define IMX296_PIXEL_ARRAY_HEIGHT 1088
-#ifdef IMX296_PIXEL_ARRAY_WIDTH
-        /*
-         * Horizontal blanking is controlled through the HMAX register, which
-         * contains a line length in INCK clock units. The INCK frequency is
-         * fixed to 74.25 MHz. The HMAX value is currently fixed to 1100,
-         * convert it to a number of pixels based on the nominal pixel rate.
-         */
-        hblank.max = 1100 * 1188000000ULL / 10 / 74250000 - IMX296_PIXEL_ARRAY_WIDTH;
-        hblank.min = hblank.max;
-        hblank.def = hblank.max;
-        // TODO if (hblank_ctrl)
-        //          hblank_ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
-
-        vblank.min = 30;
-        vblank.max = 1048575 - IMX296_PIXEL_ARRAY_HEIGHT;
-        vblank.def = vblank.min;
-#endif
-#endif
-}
 
 // *** Initialisation *********************************************************
 
-// static void vc_setup_power_gpio(struct vc_device *device)
-// {
-//         struct device *dev = &device->cam.ctrl.client_sen->dev;
 
-//         device->power_gpio = devm_gpiod_get_optional(dev, "power", GPIOD_OUT_HIGH);
-//         if (IS_ERR(device->power_gpio)) {
-//                 vc_err(dev, "%s(): Failed to setup power-gpio\n", __func__);
-//                 device->power_gpio = NULL;
-//         }
-// }
 
 static int __maybe_unused vc_check_hwcfg(struct vc_cam *cam, struct device *dev)
 {
@@ -672,7 +634,6 @@ static int __maybe_unused vc_check_hwcfg(struct vc_cam *cam, struct device *dev)
 
         /* Set and check the number of MIPI CSI2 data lanes */
         ret = vc_core_set_num_lanes(cam, ep_cfg.bus.mipi_csi2.num_data_lanes);
-        ;
 
 error_out:
         v4l2_fwnode_endpoint_free(&ep_cfg);
@@ -740,21 +701,6 @@ static int vc_ctrl_init_ctrl_special(struct vc_device *device, struct v4l2_ctrl_
         return 0;
 }
 
-static int vc_ctrl_init_ctrl_config(struct vc_device *device, struct v4l2_ctrl_handler *hdl,const struct v4l2_ctrl_config *ctrl_config)
-{
-        struct i2c_client *client = device->cam.ctrl.client_sen;
-        struct device *dev = &client->dev;
-        struct v4l2_ctrl *ctrl;
-
-        ctrl = v4l2_ctrl_new_std(&device->ctrl_handler, &vc_ctrl_ops, ctrl_config->id, ctrl_config->min, ctrl_config->max, 1, ctrl_config->def);
-        if (ctrl == NULL)
-        {
-                vc_err(dev, "%s(): Failed to init 0x%08x ctrl\n", __func__, ctrl_config->id);
-                return -EIO;
-        }
-
-        return 0;
-}
 
 static int vc_ctrl_init_ctrl_lfreq(struct vc_device *device, struct v4l2_ctrl_handler *hdl, int id, struct vc_control64 *control)
 {
@@ -900,7 +846,7 @@ static const struct v4l2_ctrl_config ctrl_flash_mode = {
     .type = V4L2_CTRL_TYPE_INTEGER,
     .flags = V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
     .min = 0,
-    .max = 1,
+    .max = 5,
     .step = 1,
     .def = 0,
 };
@@ -995,20 +941,10 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
 {
         struct vc_desc_mode *mode_desc = &cam->desc.modes[cam->state.mode];
 
-
-        printk(KERN_INFO "vc_update_clk_rates\n");
-
-        vc_mode *mode;
-
-        for(int i = 0; i < MAX_VC_DESC_MODES; i++)
+        vc_mode *mode = vc_core_get_mode_by_state(cam);
+        if(mode == NULL)
         {
-                if(mode_desc->format == cam->ctrl.mode[i].format && 
-                        mode_desc->num_lanes == cam->ctrl.mode[i].num_lanes && 
-                        mode_desc->binning == cam->ctrl.mode[i].binning)
-                {
-                        mode = &cam->ctrl.mode[i];
-                        break;
-                }
+                return;
         }
         int num_lanes = mode->num_lanes;
         int bit_depth = vc_get_bit_depth(mode->format);
@@ -1030,8 +966,6 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
         ctrl_vblank.max = vblank.max;
         ctrl_vblank.def = vblank.def;
 
-        printk(KERN_INFO "vc_update_clk_rates: hmax: %d\n", mode->hmax);
-
         hblank.min = mode->hmax * num_lanes * 2 - cam->state.frame.width ;
         hblank.max = hblank.min + 1000;
         hblank.def = hblank.min;
@@ -1043,7 +977,6 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
 
         if(device->ctrl_vblank)
         {
-                printk(KERN_INFO "vc_update_clk_rates: vblank.min: %d\n", vblank.min);
                 device->ctrl_vblank->maximum = vblank.max;
                 device->ctrl_vblank->minimum = vblank.min;
                 device->ctrl_vblank->default_value = vblank.def;
@@ -1051,8 +984,6 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
         }
         if(device->ctrl_hblank)
         {
-                printk(KERN_INFO "vc_update_clk_rates: hblank.max: %d\n", hblank.max);
-
                 device->ctrl_hblank->maximum = hblank.max;
                 device->ctrl_hblank->minimum = hblank.min;
                 device->ctrl_hblank->default_value = hblank.def;
@@ -1091,6 +1022,15 @@ static int vc_sd_init(struct vc_device *device)
 
         vc_update_clk_rates(device,&device->cam);
         struct v4l2_ctrl *ctrl;
+
+        printk(KERN_INFO "exposure.min: %d\n", device->cam.ctrl.exposure.min);
+        printk(KERN_INFO "exposure.max: %d\n", device->cam.ctrl.exposure.max);
+        printk(KERN_INFO "exposure.def: %d\n", device->cam.ctrl.exposure.def);
+        printk(KERN_INFO "vc_core_get_time_per_line_ns: %lu\n",  vc_calculate_line_duration(&device->cam));
+
+        // device->cam.ctrl.exposure.min = (device->cam.ctrl.exposure.min / (vc_core_get_time_per_line_ns(&device->cam) / 1000));
+        // device->cam.ctrl.exposure.max = (device->cam.ctrl.exposure.max / (vc_core_get_time_per_line_ns(&device->cam) / 1000));
+        // device->cam.ctrl.exposure.def = (device->cam.ctrl.exposure.def / (vc_core_get_time_per_line_ns(&device->cam) / 1000));
 
         // Add controls
         ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_EXPOSURE, &device->cam.ctrl.exposure);
@@ -1136,114 +1076,6 @@ static int vc_sd_init(struct vc_device *device)
         return 0;
 }
 
-#if 1 // MS from old imx driver read DT props //TODO integrate in the new driver
-struct imx_dtentry
-{
-        u32 sensor_mode;
-        u32 data_lanes;
-        u32 io_config;
-        s64 linkfreq;
-        u32 enable_extrig;
-        u32 sen_clk;
-};
-#define NULL_imx_dtentry {0, 0, 0, 0, 0}
-
-// static int vc_rpi_devicetree_read(struct i2c_client *client, struct imx_dtentry *dtentry)
-// {
-//         struct device_node *endpoint;
-//         struct device_node *node;
-//         const __be32 *prop; // property is defined as big endian integer
-//         int len;            // property len is sizeof(u32)
-
-//         /*
-//          * read config-io and sensor_mode property
-//          */
-
-//         node = (&client->dev)->of_node;
-
-//         if (!node)
-//         {
-//                 dev_err(&client->dev, "device node not found\n");
-//                 return -EINVAL;
-//         }
-
-//         prop = of_get_property(node, "io-config", &len); // read property from device node
-
-//         if (prop && len == sizeof(u32))
-//         {
-//                 dtentry->io_config = be32_to_cpu(prop[0]);
-//                 dev_info(&client->dev, "read property io-config = %d\n", dtentry->io_config);
-//         }
-
-//         prop = of_get_property(node, "external-trigger-mode-overwrite", &len); // read property from device node
-
-//         if (prop && len == sizeof(u32))
-//         {
-//                 dtentry->enable_extrig = be32_to_cpu(prop[0]); // set ext trig source to pin=1 or selftriggered=4;
-//                 dev_info(&client->dev, "read property external-trigger-mode-overwrite = %d\n", dtentry->enable_extrig);
-//         }
-//         else
-//         {
-
-//                 prop = of_get_property(node, "external-trigger-mode", &len); // read property from device node
-
-//                 if (prop && len == sizeof(u32))
-//                 {
-//                         dtentry->enable_extrig = be32_to_cpu(prop[0]); // set ext trig source to pin=1 or selftriggered=4;
-//                         dev_info(&client->dev, "read property external-trigger-mode = %d\n", dtentry->enable_extrig);
-//                 }
-//                 else
-//                         dtentry->enable_extrig = 1; // set ext trig source to pin=1 as fallback
-//         }
-
-//         prop = of_get_property(node, "sensor-mode", &len); // read property from device node
-
-//         if (prop && len == sizeof(u32))
-//         {
-//                 dtentry->sensor_mode = be32_to_cpu(prop[0]); // read property sensor_mode
-//                 dev_info(&client->dev, "read property sensor-mode = %d\n", dtentry->sensor_mode);
-//         }
-
-//         node = of_get_child_by_name((&client->dev)->of_node, "camera-clk");
-//         if (!node)
-//         {
-//                 dev_err(&client->dev, "child 'camera-clk' in DT not found\n");
-//         }
-//         else
-//         {
-
-//                 prop = of_get_property(node, "clock-frequency", &len); // read property from device node
-
-//                 if (prop && len == sizeof(u32))
-//                 {
-//                         dtentry->sen_clk = be32_to_cpu(prop[0]); // set sensor oscillator clock in HZ normal=54Mhz IMX183=72Mhz
-//                         dev_info(&client->dev, "read property clock-frequency = %d\n", dtentry->sen_clk);
-//                 }
-//                 of_node_put(node);
-//         }
-
-//         /*
-//          * read data-lanes and link-frequencies property
-//          */
-
-//         endpoint = of_graph_get_next_endpoint((&client->dev)->of_node, NULL);
-//         if (!endpoint)
-//         {
-//                 dev_err(&client->dev, "endpoint node not found\n");
-//                 return -EINVAL;
-//         }
-
-//         dtentry->data_lanes = fwnode_property_read_u32_array(of_fwnode_handle(endpoint), "data-lanes", NULL, 0);
-//         if (dtentry->data_lanes) // number of entries in data-lanes property
-//                 dev_info(&client->dev, "read property data-lanes = %d\n", dtentry->data_lanes);
-
-//         len = fwnode_property_read_u64_array(of_fwnode_handle(endpoint), "link-frequencies", &(dtentry->linkfreq), 1);
-//         if (!len) // first link-frequency in property array found
-//                 dev_info(&client->dev, "read property link-frequencies[0] = %lld\n", dtentry->linkfreq);
-
-//         return 0;
-// }
-#endif
 
 static int vc_link_setup(struct media_entity *entity, const struct media_pad *local, const struct media_pad *remote,
                          __u32 flags)
@@ -1272,13 +1104,12 @@ static int vc_probe(struct i2c_client *client)
         cam->ctrl.client_sen = client;
 
 
-        // vc_setup_power_gpio(device);
         vc_set_power(device, 1);
 
         ret = vc_core_init(cam, client);
         if (ret)
                 goto error_power_off;
-        cam->ctrl.flags |= FLAG_FORMAT_PACKED; //Raspi packed formats for 10bit
+
 
 
         ret = vc_check_hwcfg(cam, dev); 
@@ -1286,7 +1117,6 @@ static int vc_probe(struct i2c_client *client)
         if (ret)
                 goto error_power_off;
 
-        mutex_init(&device->mutex);
         vc_mod_set_mode(cam, &ret); 
         ret = vc_sd_init(device);
         if (ret)
