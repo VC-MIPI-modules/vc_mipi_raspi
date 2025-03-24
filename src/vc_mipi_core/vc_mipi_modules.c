@@ -48,6 +48,7 @@
                 } while (0); \
         }
 
+
 int vc_mod_is_color_sensor(struct vc_desc *desc)
 {
         if (desc->sen_type[0] != 0) {
@@ -238,6 +239,7 @@ static void vc_init_ctrl_imx226(struct vc_ctrl *ctrl, struct vc_desc* desc)
         ctrl->clk_pixel                 = 72000000;
 
         ctrl->flags                    |= FLAG_FORMAT_GBRG;
+        ctrl->flags                    |= FLAG_RESET_ALWAYS;
         ctrl->flags                    |= FLAG_TRIGGER_STREAM_EDGE | FLAG_TRIGGER_STREAM_LEVEL;
 }
 
@@ -338,6 +340,11 @@ static void vc_init_ctrl_imx273(struct vc_ctrl *ctrl, struct vc_desc* desc)
         MODE( 3, 4, FORMAT_RAW08, 0,     238,   15,  0xfffff,  1130,  255,   15,    519230)
         MODE( 4, 4, FORMAT_RAW10, 0,     290,   15,  0xfffff,  1130, 1032,   60,    519230)
         MODE( 5, 4, FORMAT_RAW12, 0,     396,   15,  0xfffff,  1130, 4095,  240,    519230)
+        
+        BINNING(ctrl->binnings[0], 0, 0)
+        BINNING(ctrl->binnings[1], 2, 2)
+        
+        ctrl->max_binning_modes_used = 1;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -372,6 +379,11 @@ static void vc_init_ctrl_imx296(struct vc_ctrl *ctrl, struct vc_desc* desc)
         // All read out      binning    hmax  vmax      vmax   vmax  blkl  blkl  retrigger
         //                      mode           min       max    def   max   def
         MODE( 0, 1, FORMAT_RAW10, 0,    1100,    5,  0xfffff,  1110, 1023,   60,    883008)
+
+        BINNING(ctrl->binnings[0], 0, 0)
+        BINNING(ctrl->binnings[1], 2, 2)
+        
+        ctrl->max_binning_modes_used = 1;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -437,10 +449,10 @@ static void vc_init_ctrl_imx335(struct vc_ctrl *ctrl, struct vc_desc* desc)
         FRAME(7, 52, 2592, 1944)
         // All read out      binning    hmax  vmax      vmax   vmax  blkl  blkl  retrigger
         //                      mode           min       max    def   max   def
-        MODE( 0, 2, FORMAT_RAW10, 0,   0x113,    9,  0xfffff,  4500, 1023,   50,         0)
+        MODE( 0, 2, FORMAT_RAW10, 0,   0x226,    9,  0xfffff,  4500, 1023,   50,         0)
         MODE( 1, 2, FORMAT_RAW12, 0,   0x226,    9,  0xfffff,  4500, 1023,   50,         0)
         MODE( 2, 4, FORMAT_RAW10, 0,   0x113,    9,  0xfffff,  4500, 1023,   50,         0)
-        MODE( 3, 4, FORMAT_RAW12, 0,   0x226,    9,  0xfffff,  4500, 1023,   50,         0)
+        MODE( 3, 4, FORMAT_RAW12, 0,   0x113,    9,  0xfffff,  4500, 1023,   50,         0)
 
         ctrl->flags                    |= FLAG_EXPOSURE_SONY;
         ctrl->flags                    |= FLAG_INCREASE_FRAME_RATE;
@@ -615,10 +627,6 @@ static void vc_init_ctrl_imx462(struct vc_ctrl *ctrl, struct vc_desc *desc)
 
 }
 
-// ------------------------------------------------------------------------------------------------
-//  Settings for IMX565 (Rev.03)
-//  12.4 MegaPixel Pregius S
-
 #define IMX56X_HV_MODE                  0x303c
 #define IMX56X_BINNING_MODE_DISABLE     0x00
 #define IMX56X_BINNING_MODE_ENABLE      0x10
@@ -633,6 +641,10 @@ static void vc_init_ctrl_imx462(struct vc_ctrl *ctrl, struct vc_desc *desc)
 #define IMX56X_GMTWT                    0x30e3
 #define IMX56X_GAINDLY                  0x30e5
 #define IMX56X_GSDLY                    0x30e6
+
+// ------------------------------------------------------------------------------------------------
+//  Settings for IMX565 (Rev.03)
+//  12.4 MegaPixel Pregius S
 
 static void vc_init_ctrl_imx565(struct vc_ctrl *ctrl, struct vc_desc *desc)
 {
@@ -824,6 +836,7 @@ static void vc_init_ctrl_imx567(struct vc_ctrl *ctrl, struct vc_desc* desc)
         ctrl->flags                    |= FLAG_IO_ENABLED;
         ctrl->flags                    |= FLAG_TRIGGER_EXTERNAL | FLAG_TRIGGER_PULSEWIDTH |
                                           FLAG_TRIGGER_SELF | FLAG_TRIGGER_SINGLE;
+        ctrl->flags                    |= FLAG_USE_BINNING_INDEX;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -893,6 +906,7 @@ static void vc_init_ctrl_imx568(struct vc_ctrl *ctrl, struct vc_desc* desc)
         ctrl->flags                    |= FLAG_IO_ENABLED;
         ctrl->flags                    |= FLAG_TRIGGER_EXTERNAL | FLAG_TRIGGER_PULSEWIDTH |
                                           FLAG_TRIGGER_SELF | FLAG_TRIGGER_SINGLE;
+        ctrl->flags                    |= FLAG_USE_BINNING_INDEX;
 }
 
 // ------------------------------------------------------------------------------------------------
