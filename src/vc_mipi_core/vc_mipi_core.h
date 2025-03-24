@@ -274,7 +274,11 @@ struct vc_cam {
 // --- Helper functions to allow i2c communication for customization ----------
 int vc_read_i2c_reg(struct i2c_client *client, const __u16 addr);
 int vc_write_i2c_reg(struct i2c_client *client, const __u16 addr, const __u8 value);
+
+
 struct i2c_client *vc_mod_get_client(struct device *dev, struct i2c_adapter *adapter, __u8 i2c_addr);
+__u32 vc_core_calculate_period_1H(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning);
+__u8 vc_core_mbus_code_to_format(__u32 code);
 
 // --- Helper functions for internal data structures --------------------------
 void vc_core_print_debug(struct vc_cam *cam);                                   // Only used by NVIDIA driver

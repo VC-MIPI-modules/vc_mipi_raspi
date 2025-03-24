@@ -68,7 +68,7 @@ struct device *vc_core_get_mod_device(struct vc_cam *cam);
 int vc_core_try_format(struct vc_cam *cam, __u32 code);
 __u32 vc_core_calculate_max_exposure(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning);
 __u32 vc_core_calculate_max_frame_rate(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning, __u32 height);
-static __u32 vc_core_calculate_period_1H(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning);
+__u32 vc_core_calculate_period_1H(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning);
 void vc_core_calculate_roi(struct vc_cam *cam, __u32 *w_left, __u32 *w_right, __u32 *w_width,
         __u32 *w_top, __u32 *w_bottom, __u32 *w_height, __u32 *o_width, __u32 *o_height);
 static int vc_sen_read_image_size(struct vc_ctrl *ctrl, struct vc_frame *size);
@@ -413,7 +413,7 @@ static int vc_core_get_fourcc_fmt(__u32 code, char *buf, bool packed)
         return 0;
 }
 
-static __u8 vc_core_mbus_code_to_format(__u32 code)
+__u8 vc_core_mbus_code_to_format(__u32 code)
 {
         switch (code) {
         case MEDIA_BUS_FMT_Y8_1X8:
@@ -435,7 +435,7 @@ static __u8 vc_core_mbus_code_to_format(__u32 code)
         }
         return 0;
 }
-
+EXPORT_SYMBOL(vc_core_mbus_code_to_format);
 static __u32 vc_core_format_to_mbus_code(__u8 format, int is_color, int is_gbrg)
 {
         switch (format) {
@@ -1990,7 +1990,7 @@ EXPORT_SYMBOL(vc_sen_stop_stream);
 
 // ------------------------------------------------------------------------------------------------
 
-static __u32 vc_core_calculate_period_1H(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning)
+__u32 vc_core_calculate_period_1H(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning)
 {
         struct vc_ctrl *ctrl = &cam->ctrl;
         int binning_index = 0;
@@ -2008,7 +2008,7 @@ static __u32 vc_core_calculate_period_1H(struct vc_cam *cam, __u8 num_lanes, __u
 
         return 0;
 }
-
+EXPORT_SYMBOL(vc_core_calculate_period_1H);
 __u32 vc_core_get_time_per_line_ns(struct vc_cam *cam)
 {
         struct vc_state *state = &cam->state;

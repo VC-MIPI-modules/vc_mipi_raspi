@@ -36,15 +36,19 @@ int vc_sd_s_frame_interval(struct v4l2_subdev *sd, struct v4l2_subdev_frame_inte
 int vc_ctrl_s_ctrl(struct v4l2_ctrl *ctrl);
 
 // --- Structures --------------------------------------------------------------
-
+#define U_BYTE(value) (__u8)((value >> 24) & 0xff)
+#define H_BYTE(value) (__u8)((value >> 16) & 0xff)
+#define M_BYTE(value) (__u8)((value >>  8) & 0xff)
+#define L_BYTE(value) (__u8)((value >>  0) & 0xff)
 enum private_cids
 {
-        V4L2_CID_VC_TRIGGER_MODE = V4L2_CID_USER_BASE | 0xfff0, // TODO FOR NOW USE 0xfff0 offset
+        V4L2_CID_VC_TRIGGER_MODE = V4L2_CID_USER_BASE | 0xffe0, // TODO FOR NOW USE 0xfff0 offset
         V4L2_CID_VC_IO_MODE,
         V4L2_CID_VC_FRAME_RATE,
         V4L2_CID_VC_SINGLE_TRIGGER,
         V4L2_CID_VC_BINNING_MODE,
         V4L2_CID_VC_ROI_POSITION,
+        V4L2_CID_VC_QUAD_SHUTTER_MODE
 };
 
 enum pad_types {
@@ -70,7 +74,10 @@ struct vc_device
 
         struct v4l2_ctrl *ctrl_hblank;
         struct v4l2_ctrl *ctrl_vblank;
-        
+        struct v4l2_ctrl *ctrl_quad_shutter_mode;
+
+        bool enable_quad_shutter;
+
 
 
 
@@ -204,6 +211,73 @@ static unsigned long vc_calculate_line_duration(struct vc_cam *cam)
         return line_duration_ns;
 }
 
+int vc_mod_set_quad_shutter_mode(struct vc_device *device, bool enable, bool directMode) {
+        struct i2c_client *client = device->cam.ctrl.client_sen;
+        // struct device *dev = &client->dev;
+        int ret;
+        if(enable)
+        {
+                ret = vc_write_i2c_reg(client, 0x34eB, directMode ? 0x80 : 0x00);
+                ret = vc_write_i2c_reg(client, 0x34B0, enable ? 0x01 : 0x00);
+
+
+        }
+        else
+        {
+                ret = vc_write_i2c_reg(client, 0x34B0, enable ? 0x01 : 0x00);
+                ret = vc_write_i2c_reg(client, 0x34eB, directMode ? 0x80 : 0x00);
+
+        }
+
+        return ret;
+}
+int vc_mod_set_quad_shutter_exposure(struct vc_cam *cam, int pixel, int exposure_time) {
+        struct i2c_client *client = cam->ctrl.client_sen;
+
+        int reg_exp = 0x34C4 + (pixel * 3);
+        int ret;
+
+        if (!client) {
+                pr_err("vc_mod_set_quad_shutter_exposure: client is NULL\n");
+                return -EINVAL;
+        }
+        ret  = vc_write_i2c_reg(client, reg_exp,     L_BYTE(exposure_time));
+        ret |= vc_write_i2c_reg(client, reg_exp +1 , M_BYTE(exposure_time));
+        ret |= vc_write_i2c_reg(client, reg_exp +2 , H_BYTE(exposure_time));
+        
+
+      
+        return ret;
+}
+int vc_mod_set_quad_shutter_delay(struct vc_cam *cam, int pixel, int start_time) {
+
+        struct i2c_client *client = cam->ctrl.client_sen;
+        int reg_start = 0x34B4 + (pixel * 3);
+        int ret;
+
+        const int period_1h = vc_core_calculate_period_1H(cam, cam->state.num_lanes, vc_core_mbus_code_to_format(cam->state.format_code), cam->state.binning_mode);
+
+        const int qsh_factor_scaled = 1347; // Scale 13.47 by 100
+
+        int value = (int)((start_time - 4* period_1h)* 100 / qsh_factor_scaled ) -  10105;
+
+                //   Exposure start delay [μs] = 4 × (1H period) + (10105 + QSH_EXP_START*1)× (Unit of QSH control *2)  
+                //  *1 Register settings for each pixel. (QSH_EXP_START1 to QSH_EXP_START4) 
+                //  *2 Unit of QSH control by each INCK settings.
+
+        if (!client) {
+                pr_err("vc_mod_set_quad_shutter_delay: client is NULL\n");
+                return -EINVAL;
+        }
+        ret  = vc_write_i2c_reg( client, reg_start,     L_BYTE(value));
+        ret |= vc_write_i2c_reg( client, reg_start +1 , M_BYTE(value));
+        ret |= vc_write_i2c_reg( client, reg_start +2 , H_BYTE(value));
+
+
+        return ret;
+
+
+}
 static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
 {
         struct vc_cam *cam = to_vc_cam(sd);
@@ -258,7 +332,9 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
 
         case V4L2_CID_VC_ROI_POSITION:
                 return vc_core_live_roi(cam, control->value);
-
+        case V4L2_CID_VC_QUAD_SHUTTER_MODE:
+                device->enable_quad_shutter = control->value;
+                return vc_mod_set_quad_shutter_mode(device, control->value, true);
 
         default:
                 vc_warn(dev, "%s(): Unkown control 0x%08x\n", __func__, control->id);
@@ -275,6 +351,8 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
         struct vc_device *device = to_vc_device(sd);
         struct vc_cam *cam = to_vc_cam(sd);
         struct vc_state *state = &cam->state;
+        struct i2c_client *client = device->cam.ctrl.client_sen;
+
         struct device *dev = sd->dev;
         int reset = 0;
         int ret = 0;
@@ -296,10 +374,32 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
                 }
 
                 ret = vc_mod_set_mode(cam, &reset);
+
+                if(client)
+                {
+                        if(device->enable_quad_shutter)
+                        {
+                                ret = vc_write_i2c_reg(client, 0x30D2, 0x0810);
+
+                                vc_core_calculate_period_1H(cam, state->num_lanes, vc_core_mbus_code_to_format(state->format_code), state->binning_mode);
+                                vc_mod_set_quad_shutter_mode(device, true, true);
+                                vc_mod_set_quad_shutter_exposure(cam, 0, state->exposure / 4);
+                                vc_mod_set_quad_shutter_exposure(cam, 1, state->exposure / 4 * 2);
+                                vc_mod_set_quad_shutter_exposure(cam, 2, state->exposure / 4 * 3);
+                                vc_mod_set_quad_shutter_exposure(cam, 3, state->exposure );
+                        }
+
+                       
+                }
+                else
+                {
+                        vc_err(dev, "No client found\n");
+                }
+
+
+              
                 ret |= vc_sen_set_roi(cam);
-
-                ret |= vc_sen_set_exposure(cam, cam->state.exposure  );
-
+                ret |= vc_sen_set_exposure(cam, (cam->state.exposure * vc_core_get_time_per_line_ns(cam)) / 1000);
                 update_frame_rate_ctrl(cam,device);
                 if (!ret && reset)
                 {
@@ -935,7 +1035,17 @@ static struct v4l2_ctrl_config ctrl_vblank = {
         .def = 0,
     };
 
-
+ static struct v4l2_ctrl_config ctrl_quadshutter = {
+        .ops = &vc_ctrl_ops,
+        .id = V4L2_CID_VC_QUAD_SHUTTER_MODE, 
+        .name = "Quad shutter mode",
+        .type = V4L2_CTRL_TYPE_BOOLEAN,
+        .flags = V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
+        .min = 0,
+        .max = 1,
+        .step = 1,
+        .def = 0,
+    };
 
 static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
 {
@@ -943,7 +1053,7 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
 
         vc_mode *mode = vc_core_get_mode_by_state(cam);
         if(mode == NULL)
-        {
+                {
                 return;
         }
         int num_lanes = mode->num_lanes;
@@ -1011,7 +1121,7 @@ static int vc_sd_init(struct vc_device *device)
         v4l2_i2c_subdev_init(&device->sd, client, &vc_subdev_ops);
 
         // Initialize the handler
-        ret = v4l2_ctrl_handler_init(&device->ctrl_handler, 3);
+        ret = v4l2_ctrl_handler_init(&device->ctrl_handler, 20);
         if (ret)
         {
                 vc_err(dev, "%s(): Failed to init control handler\n", __func__);
@@ -1052,6 +1162,9 @@ static int vc_sd_init(struct vc_device *device)
         ret |= vc_ctrl_init_ctrl_lfreq(device, &device->ctrl_handler, V4L2_CID_LINK_FREQ, &linkfreq);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_hblank,  &device->ctrl_hblank);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_vblank,  &device->ctrl_vblank);
+
+        ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_quadshutter,  &device->ctrl_quad_shutter_mode);
+
         // ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_ANALOGUE_GAIN, &device->cam.ctrl.gain);
         ret |= vc_ctrl_init_ctrl_lc(device, &device->ctrl_handler);
                 // Set the standard format
@@ -1211,6 +1324,7 @@ module_i2c_driver(vc_i2c_driver);
 
 MODULE_VERSION(VERSION);
 MODULE_DESCRIPTION("Vision Components GmbH - VC MIPI CSI-2 driver");
+MODULE_AUTHOR("Florian Schmid, Vision Components GmbH <florian.schmid@vision-components.com>");
 MODULE_AUTHOR("Peter Martienssen, Liquify Consulting <peter.martienssen@liquify-consulting.de>");
 MODULE_AUTHOR("Michael Steinel, Vision Components GmbH <mipi-tech@vision-components.com>");
 MODULE_LICENSE("GPL v2");
