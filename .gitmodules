@@ -1,0 +1,3 @@
+[submodule "src/vc_mipi_core"]
+	path = src/vc_mipi_core
+	url = https://github.com/VC-MIPI-modules/vc_mipi_core.git
