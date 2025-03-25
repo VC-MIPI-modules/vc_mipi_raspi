@@ -1580,6 +1580,7 @@ struct vc_binning *vc_core_get_binning(struct vc_cam *cam)
 
         return &ctrl->binnings[state->binning_mode];
 }
+EXPORT_SYMBOL(vc_core_get_binning);
 
 void vc_core_calculate_roi(struct vc_cam *cam, __u32 *left, __u32 *right, __u32 *width,
         __u32 *top, __u32 *bottom, __u32 *height, __u32 *o_width, __u32 *o_height)
