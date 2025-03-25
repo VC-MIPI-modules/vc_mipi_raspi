@@ -201,7 +201,7 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
                 return vc_mod_set_single_trigger(cam);
 
         case V4L2_CID_VC_BINNING_MODE:
-                return 0; // TODO vc_sen_set_binning_mode(cam, control->value);
+                return vc_core_set_binning_mode(cam, control->value);
 
         case V4L2_CID_VC_ROI_POSITION:
                 return vc_core_live_roi(cam, control->value);
