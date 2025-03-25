@@ -58,7 +58,7 @@ overlays/%.dtbo: overlays/%.dts
 overlays/vc-mipi-bcm2712-cam0.dtbo: overlays/vc-mipi-bcm2712-cam0-overlay.dts
 	dtc -W no-unit_address_vs_reg -@ -I dts -O dtb  -o $@  $<
 
-KERNEL_HEADERS := /lib/modules/$(shell uname -r)/build
+KERNEL_HEADERS := /home/vc/linux
 
 # Debug information
 $(info KERNEL_HEADERS=$(KERNEL_HEADERS))
@@ -83,19 +83,19 @@ build:
 all: $(DEVICETREES) build
 
 clean:
-	$(MAKE) -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
+	$(MAKE) -C $(KERNEL_HEADERS) M=$(PWD) clean
 	-rm -f $(SENSORDRIVERS)
 	-rm -f $(DEVICETREES)
 
 reload:
 	-sudo modprobe -r bcm2835-unicam
-	-sudo modprobe -r rp1_cfe
+	-sudo modprobe -r rp1_cfe 
 	-sudo modprobe -r vc_mipi_camera
 	-sudo modprobe -r vc_mipi_modules
 	-sudo modprobe -r vc_mipi_core
 
 	-sudo modprobe bcm2835-unicam
-	-sudo modprobe rp1_cfe
+	-sudo modprobe rp1_cfe verbose_debug=1
 	-sudo modprobe vc_mipi_core
 	-sudo modprobe vc_mipi_modules
 	-sudo modprobe vc_mipi_camera
@@ -118,8 +118,7 @@ install: all
 	sudo cp 99-camera-setup.rules /etc/udev/rules.d/
 	sudo cp vc-config /usr/local/bin/
 	sudo chmod +x /usr/local/bin/vc-config
-	echo "include config_vc-mipi-driver-bcm2712.txt" | sudo tee -a  /boot/firmware/config.txt
-
+	grep -qxF "include config_vc-mipi-driver-bcm2712.txt" /boot/firmware/config.txt || echo "include config_vc-mipi-driver-bcm2712.txt" | sudo tee -a /boot/firmware/config.txt
 uninstall:
 	sudo rm -f $(foreach sentype,$(SENSOR_NAMES),$(KERNEL_I2C_DIR)/$(sentype).ko)
 	sudo rm -f $(foreach sencommon,$(SENSOR_DRIVER),$(KERNEL_I2C_DIR)/$(sencommon).ko)

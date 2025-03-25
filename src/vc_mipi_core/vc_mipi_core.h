@@ -318,10 +318,13 @@ int vc_mod_set_io_mode(struct vc_cam *cam, int mode);
 
 // --- Functions for the VC MIPI Sensors --------------------------------------
 int vc_sen_set_roi(struct vc_cam *cam);
+struct v4l2_rect vc_sen_get_roi(struct vc_cam *cam);
 int vc_sen_set_exposure(struct vc_cam *cam, int exposure);
 int vc_sen_set_gain(struct vc_cam *cam, __u64 gain, bool unit_is_mdB);
 int vc_sen_set_blacklevel(struct vc_cam *cam, __u32 blacklevel);
 int vc_sen_start_stream(struct vc_cam *cam);
 int vc_sen_stop_stream(struct vc_cam *cam);
+int vc_sen_set_hmax(struct vc_cam *cam);
+int vc_sen_write_vmax(struct vc_ctrl *ctrl, __u32 vmax);
 
 #endif // _VC_MIPI_CORE_H

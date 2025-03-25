@@ -921,6 +921,7 @@ static void vc_init_ctrl_imx900(struct vc_ctrl *ctrl, struct vc_desc* desc)
 
         ctrl->csr.sen.blacklevel        = (vc_csr2) { .l = 0x35b4, .m = 0x35b5 };
         ctrl->csr.sen.vmax              = (vc_csr4) { .l = 0x30d4, .m = 0x30d5, .h = 0x30d6, .u = 0x0000 };
+        ctrl->csr.sen.hmax              = (vc_csr4) { .l = 0x30d8, .m = 0x30d9, .h = 0x0000, .u = 0x0000 };
         ctrl->csr.sen.mode              = (vc_csr2) { .l = 0x3000, .m = 0x3010 };
         ctrl->csr.sen.mode_standby      = 0x01;
         ctrl->csr.sen.mode_operating    = 0x00;
