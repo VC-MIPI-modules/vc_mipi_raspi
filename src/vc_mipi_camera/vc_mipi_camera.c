@@ -79,7 +79,7 @@ static        struct vc_control hblank; //TODO Check implementation
 static        struct vc_control vblank; //TODO Check implementation
 static        struct vc_control pixel_rate; //TODO Check implementation
 static void update_frame_rate_ctrl(struct vc_cam *cam, struct vc_device *device);
-
+int vc_sd_update_fmt(struct vc_device *device);
 // --- v4l2_subdev_core_ops ---------------------------------------------------
 
 static void vc_set_power(struct vc_device *device, int on)
@@ -166,7 +166,9 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
 {
         struct vc_cam *cam = to_vc_cam(sd);
         struct device *dev = vc_core_get_sen_device(cam);
+        struct vc_device *device = to_vc_device(sd);
         // __u32 left, top;
+        int ret = 0;
 
         switch (control->id)
         {
@@ -201,7 +203,9 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
                 return vc_mod_set_single_trigger(cam);
 
         case V4L2_CID_VC_BINNING_MODE:
-                return vc_core_set_binning_mode(cam, control->value);
+                ret = vc_core_set_binning_mode(cam, control->value);                
+                vc_sd_update_fmt(device);
+                return ret;
 
         case V4L2_CID_VC_ROI_POSITION:
                 return vc_core_live_roi(cam, control->value);
@@ -303,7 +307,11 @@ static int vc_sd_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state
         struct vc_cam *cam = to_vc_cam(sd);
         struct v4l2_mbus_framefmt *mf = &format->format;
 
-        mutex_lock(&device->mutex);
+        bool mutex_locked = mutex_is_locked(&device->mutex);
+        if (!mutex_locked) {
+                mutex_lock(&device->mutex);
+        }
+
 
         vc_core_set_format(cam, mf->code);
         // TODO vc_core_set_frame(cam, mf->top, mf->left, mf->width, mf->height);
@@ -311,8 +319,9 @@ static int vc_sd_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state
         mf->field = V4L2_FIELD_NONE;
         mf->colorspace = V4L2_COLORSPACE_SRGB;
 
-        mutex_unlock(&device->mutex);
-
+        if (!mutex_locked) {
+                mutex_unlock(&device->mutex);
+        }
         return 0;
 }
 
@@ -350,7 +359,9 @@ int vc_sd_enum_frame_size(struct v4l2_subdev *sd, struct v4l2_subdev_state *cfg,
 {
         struct vc_device *device = to_vc_device(sd);
         struct vc_cam *cam = to_vc_cam(sd);
-
+        struct vc_binning *binning = vc_core_get_binning(cam);
+        __u8 h_scale = binning->h_factor == 0 ? 1 : binning->h_factor;
+        __u8 v_scale = binning->v_factor == 0 ? 1 : binning->v_factor;
         if (fse->index != 0)
                 return -EINVAL;
 
@@ -362,10 +373,12 @@ int vc_sd_enum_frame_size(struct v4l2_subdev *sd, struct v4l2_subdev_state *cfg,
                 return -EINVAL;
         }
 
-        fse->min_width = cam->ctrl.frame.width;
-        fse->max_width = fse->min_width;
-        fse->min_height = cam->ctrl.frame.height;
-        fse->max_height = fse->min_height;
+
+
+        fse->min_width = 32;
+        fse->max_width = fse->min_width / h_scale;
+        fse->min_height = 32;
+        fse->max_height = fse->min_height /v_scale;
 
         mutex_unlock(&device->mutex);
 
@@ -424,12 +437,16 @@ static int vc_sd_get_selection(struct v4l2_subdev *sd,
 {
     struct vc_device *device = to_vc_device(sd);
     struct vc_cam *cam = to_vc_cam(sd);
+    struct vc_binning *binning = vc_core_get_binning(cam);
+    __u8 h_scale = binning->h_factor == 0 ? 1 : binning->h_factor;
+    __u8 v_scale = binning->v_factor == 0 ? 1 : binning->v_factor;
+
     struct v4l2_rect r;
     if (sel->target == V4L2_SEL_TGT_CROP_DEFAULT || sel->target == V4L2_SEL_TGT_CROP_BOUNDS) {
-        r.left = cam->ctrl.frame.left;
-        r.top = cam->ctrl.frame.top;
-        r.width = cam->ctrl.frame.width;
-        r.height = cam->ctrl.frame.height;
+        r.left = cam->ctrl.frame.left / h_scale;
+        r.top = cam->ctrl.frame.top / v_scale;
+        r.width = cam->ctrl.frame.width / h_scale;
+        r.height = cam->ctrl.frame.height / v_scale;
         sel->r = r;
         return 0;
     }
@@ -806,7 +823,16 @@ static struct v4l2_ctrl_config ctrl_vblank = {
         .step = 1,
         .def = 0,
     };
-
+struct v4l2_subdev_format fmt = {
+        .which = V4L2_SUBDEV_FORMAT_ACTIVE,
+        .format = {
+        .width = 0,
+        .height = 0,
+        .code = 0,
+        .field = V4L2_FIELD_NONE,
+        .colorspace = V4L2_COLORSPACE_SRGB,
+        },
+};
 #endif
 
 
@@ -866,6 +892,18 @@ static void update_frame_rate_ctrl(struct vc_cam *cam, struct vc_device *device)
                 ctrl->val = cam->state.framerate;                
         }
 }
+int vc_sd_update_fmt(struct vc_device *device)
+{
+        vc_binning *binning = vc_core_get_binning(&device->cam);
+        __u8 h_scale = binning->h_factor == 0 ? 1 : binning->h_factor;
+        __u8 v_scale = binning->v_factor == 0 ? 1 : binning->v_factor;
+        fmt.format.code = device->cam.state.format_code;
+        fmt.format.width = device->cam.ctrl.frame.width / h_scale;
+        fmt.format.height = device->cam.ctrl.frame.height / v_scale;
+               
+
+        return v4l2_subdev_call(&device->sd, pad, set_fmt, NULL, &fmt);
+}
 static int vc_sd_init(struct vc_device *device)
 {
         struct i2c_client *client = device->cam.ctrl.client_sen;
@@ -910,18 +948,7 @@ static int vc_sd_init(struct vc_device *device)
         // ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_ANALOGUE_GAIN, &device->cam.ctrl.gain);
         ret |= vc_ctrl_init_ctrl_lc(device, &device->ctrl_handler);
                 // Set the standard format
-        struct v4l2_subdev_format fmt = {
-                .which = V4L2_SUBDEV_FORMAT_ACTIVE,
-                .format = {
-                .width = device->cam.ctrl.frame.width,
-                .height = device->cam.ctrl.frame.height,
-                .code = device->cam.state.format_code,
-                .field = V4L2_FIELD_NONE,
-                .colorspace = V4L2_COLORSPACE_SRGB,
-                },
-        };
-
-        ret = v4l2_subdev_call(&device->sd, pad, set_fmt, NULL, &fmt);
+        ret |= vc_sd_update_fmt(device);
         if (ret)
         {
                 vc_err(dev, "%s(): Failed to set format\n", __func__);
