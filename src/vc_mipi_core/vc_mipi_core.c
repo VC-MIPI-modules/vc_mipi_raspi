@@ -71,11 +71,15 @@ struct device *vc_core_get_mod_device(struct vc_cam *cam);
 int vc_core_try_format(struct vc_cam *cam, __u32 code);
 __u32 vc_core_calculate_max_exposure(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning);
 __u32 vc_core_calculate_max_frame_rate(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning, __u32 height);
-static __u32 vc_core_calculate_period_1H(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning);
+static __u32 vc_core_calculate_period_1H(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning, bool external_trigger);
 void vc_core_calculate_roi(struct vc_cam *cam, __u32 *w_left, __u32 *w_right, __u32 *w_width,
         __u32 *w_top, __u32 *w_bottom, __u32 *w_height, __u32 *o_width, __u32 *o_height);
 static int vc_sen_read_image_size(struct vc_ctrl *ctrl, struct vc_frame *size);
 struct vc_binning *vc_core_get_binning(struct vc_cam *cam);
+__u32 vc_core_get_optimized_vmax(struct vc_cam *cam, __u8 num_lanes,  __u8 format, __u8 binning_mode, __u32 height);
+__u8 vc_mod_find_mode(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 type, __u8 binning);
+__u8 vc_mod_get_type(int trigger_mode);
+int vc_core_get_mode_index(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning);
 
 
 // ------------------------------------------------------------------------------------------------
@@ -273,6 +277,17 @@ static void vc_core_print_format(__u8 format, char *buf)
         case FORMAT_RAW12: strcpy(buf, "RAW12"); break;
         case FORMAT_RAW14: strcpy(buf, "RAW14"); break;
         default: sprintf(buf, "0x%02x ", format); break;
+        }
+}
+
+static __u8 vc_core_get_bit_depth(__u8 format)
+{
+        switch (format) {
+                case FORMAT_RAW08: return  8; 
+                case FORMAT_RAW10: return 10; 
+                case FORMAT_RAW12: return 12; 
+                case FORMAT_RAW14: return 14; 
+                default:           return  0; 
         }
 }
 
@@ -534,7 +549,32 @@ vc_control vc_core_get_blacklevel(struct vc_cam *cam, __u8 num_lanes, __u8 forma
 
 __u32 vc_core_get_retrigger(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning)
 {
-        return vc_core_get_mode_by_param(cam, num_lanes, format, binning).retrigger_min;
+        struct device *dev = vc_core_get_sen_device(cam);
+
+        __u32 period_1H_ns = 0;
+        __u32 vmax = 0;
+        __u32 retrigger_min = 0;
+        __u8 bit_depth = 0;
+        __u8 type = 0;
+        vc_mode *mode = NULL;
+        if(cam->ctrl.flags & FLAG_USE_RETRIG_INTERNAL)
+        {
+                return vc_core_get_mode_by_param(cam, num_lanes, format, binning).retrigger_min;
+        }
+        else
+        {
+                type =  vc_mod_get_type(cam->state.trigger_mode);
+                mode = &cam->ctrl.mode[vc_core_get_mode_index(cam, num_lanes, format, binning)];
+                period_1H_ns = vc_core_calculate_period_1H(cam, num_lanes, format, binning, true);
+
+                vmax = vc_core_get_optimized_vmax(cam, num_lanes, format, binning, cam->state.frame.height);
+                bit_depth = vc_core_get_bit_depth(format);
+                retrigger_min =  ((__u64)period_1H_ns * vmax * 2) / num_lanes  / bit_depth;
+
+                vc_err(dev, "%s(): Retrigger min: %u (def: %u)\n", __FUNCTION__, retrigger_min, vc_core_get_mode_by_param(cam, num_lanes, format, binning).retrigger_min);
+
+                return retrigger_min;
+        }
 }
 
 #ifdef ENABLE_ADVANCED_CONTROL
@@ -842,7 +882,7 @@ __u32 vc_core_calculate_max_exposure(struct vc_cam *cam, __u8 num_lanes, __u8 fo
         case REG_TRIGGER_STREAM_LEVEL:
         default:
                 {
-                        __u32 period_1H_ns = vc_core_calculate_period_1H(cam, num_lanes, format, binning);
+                        __u32 period_1H_ns = vc_core_calculate_period_1H(cam, num_lanes, format, binning, false);
                         vc_dbg(dev, "%s(): period_1H_ns: %u, vmax.max: %u, vmax.min: %u\n",
                                 __FUNCTION__, period_1H_ns, vmax_max, vmax_min);
                         return ((__u64)period_1H_ns * (vmax_max - vmax_min)) / 1000;
@@ -892,7 +932,7 @@ __u32 vc_core_get_optimized_vmax(struct vc_cam *cam, __u8 num_lanes,  __u8 forma
 __u32 vc_core_calculate_max_frame_rate(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning, __u32 height)
 {
         struct device *dev = vc_core_get_sen_device(cam);
-        __u32 period_1H_ns = vc_core_calculate_period_1H(cam, num_lanes, format, binning);
+        __u32 period_1H_ns = vc_core_calculate_period_1H(cam, num_lanes, format, binning, false);
         __u32 vmax = vc_core_get_optimized_vmax(cam, num_lanes, format, binning, height);
         __u32 vmax_def = vc_core_get_vmax(cam, num_lanes, format, binning).def;
         __u32 frame_rate = 1000000000 / (((__u64)period_1H_ns * vmax) / 1000);
@@ -1212,7 +1252,7 @@ static int vc_mod_write_retrigger(struct i2c_client *client, __u32 value)
         return ret;
 }
 
-static __u8 vc_mod_find_mode(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 type, __u8 binning)
+__u8 vc_mod_find_mode(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 type, __u8 binning)
 {
         struct vc_desc *desc = &cam->desc;
         struct device *dev = vc_core_get_mod_device(cam);
@@ -1292,6 +1332,24 @@ static __u32 vc_sen_read_vmax(struct vc_ctrl *ctrl)
         return vmax;
 }
 #endif
+
+__u8 vc_mod_get_type(int trigger_mode)
+{
+        switch (trigger_mode) {
+        case REG_TRIGGER_DISABLE:
+        case REG_TRIGGER_STREAM_EDGE:
+        case REG_TRIGGER_STREAM_LEVEL:
+        default:
+                return MODE_TYPE_STREAM;
+        case REG_TRIGGER_SYNC:
+                return MODE_TYPE_SLAVE;
+        case REG_TRIGGER_EXTERNAL:
+        case REG_TRIGGER_PULSEWIDTH:
+        case REG_TRIGGER_SELF:
+        case REG_TRIGGER_SINGLE:
+                return MODE_TYPE_TRIGGER;
+        }
+}
 
 int vc_mod_set_mode(struct vc_cam *cam, int *reset)
 {
@@ -2047,7 +2105,7 @@ EXPORT_SYMBOL(vc_sen_stop_stream);
 
 // ------------------------------------------------------------------------------------------------
 
-static __u32 vc_core_calculate_period_1H(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning)
+static __u32 vc_core_calculate_period_1H(struct vc_cam *cam, __u8 num_lanes, __u8 format, __u8 binning, bool external_trigger)
 {
         struct vc_ctrl *ctrl = &cam->ctrl;
         int binning_index = 0;
@@ -2058,7 +2116,7 @@ static __u32 vc_core_calculate_period_1H(struct vc_cam *cam, __u8 num_lanes, __u
         for (index = 0; index <= MAX_VC_MODES; index++) {
                 struct vc_mode *mode = &ctrl->mode[index];
                 if (mode->num_lanes == num_lanes && mode->format == format && (binning_index == ctrl->mode[index].binning)) {
-                        return ((__u64)mode->hmax * 1000000000) / ctrl->clk_pixel;
+                        return ((__u64)mode->hmax * 1000000000) / (external_trigger ? ctrl->clk_ext_trigger : ctrl->clk_pixel);
                 }
         }
 
@@ -2069,7 +2127,7 @@ __u32 vc_core_get_time_per_line_ns(struct vc_cam *cam)
 {
         struct vc_state *state = &cam->state;
         __u8 format = vc_core_mbus_code_to_format(state->format_code);
-        return vc_core_calculate_period_1H(cam, state->num_lanes, format, state->binning_mode);
+        return vc_core_calculate_period_1H(cam, state->num_lanes, format, state->binning_mode, false); //TODO: external_trigger
 }
 EXPORT_SYMBOL(vc_core_get_time_per_line_ns);
 
@@ -2202,7 +2260,7 @@ static void vc_calculate_exposure(struct vc_cam *cam, __u32 exposure_us)
         __u32 vmax_def = vc_core_get_vmax(cam, num_lanes, format, binning).def;
         __u32 vmax_min = vc_core_get_vmax(cam, num_lanes, format, binning).min;
 
-        period_1H_ns = vc_core_calculate_period_1H(cam, num_lanes, format, binning);
+        period_1H_ns = vc_core_calculate_period_1H(cam, num_lanes, format, binning, false);
         vc_core_calculate_vmax(cam, period_1H_ns);
 
         // Convert exposure time from µs to ns.
@@ -2259,11 +2317,17 @@ static void vc_calculate_trig_exposure(struct vc_cam *cam, __u32 exposure_us)
                                 frametime_us = 1;
                         }
                 }
+                state->retrigger_cnt = ((__u64)frametime_us * ctrl->clk_ext_trigger) / 1000000;
+        }
+        else 
+        {
+                state->retrigger_cnt = (__u64)retrigger_min;
+
         }
 
         vc_dbg(dev, "%s(): min_frametime: %u us, frametime: %u us, exposure: %u us\n", __FUNCTION__,
                 min_frametime_us, frametime_us, exposure_us);
-        state->retrigger_cnt = ((__u64)frametime_us * ctrl->clk_ext_trigger) / 1000000;
+       
         // NOTE: Check this for different cameras.
         // if (state->retrigger_cnt < 3240) {
         // 	state->retrigger_cnt = 3240;

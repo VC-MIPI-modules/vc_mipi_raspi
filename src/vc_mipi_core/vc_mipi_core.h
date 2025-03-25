@@ -40,6 +40,7 @@ int debug = 3; // FS Workaround
 
 #define FLAG_PREGIUS_S                  (1 << 18)
 #define FLAG_USE_BINNING_INDEX          (1 << 19)
+#define FLAG_USE_RETRIG_INTERNAL        (1 << 20)
 
 #define GAIN_DISABLED                   0
 #define GAIN_LINEAR                     1

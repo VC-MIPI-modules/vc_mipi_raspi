@@ -180,7 +180,6 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
         struct vc_cam *cam = to_vc_cam(sd);
         struct device *dev = vc_core_get_sen_device(cam);
         struct vc_device *device = to_vc_device(sd);
-        int ret;
         int ret = 0;
 
         switch (control->id)
@@ -546,7 +545,6 @@ static int vc_sd_set_selection(struct v4l2_subdev *sd,
 int vc_ctrl_s_ctrl(struct v4l2_ctrl *ctrl)
 {
         struct vc_device *device = container_of(ctrl->handler, struct vc_device, ctrl_handler);
-        // struct i2c_client *client = device->cam.ctrl.client_sen;
         struct v4l2_control control;
 
         // V4L2 controls values will be applied only when power is already up
