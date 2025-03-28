@@ -102,6 +102,14 @@ static struct vc_control64 linkfreq  = {
 
 static void update_frame_rate_ctrl(struct vc_cam *cam, struct vc_device *device);
 int vc_sd_update_fmt(struct vc_device *device);
+
+static void vc_get_binning_scale(struct vc_cam *cam, __u8 *h_scale, __u8 *v_scale)
+{
+    struct vc_binning *binning = vc_core_get_binning(cam);
+
+    *h_scale = binning->h_factor == 0 ? 1 : binning->h_factor;
+    *v_scale = binning->v_factor == 0 ? 1 : binning->v_factor;
+}
 // --- v4l2_subdev_core_ops ---------------------------------------------------
 
 static void vc_set_power(struct vc_device *device, int on)
@@ -180,7 +188,6 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
         struct vc_cam *cam = to_vc_cam(sd);
         struct device *dev = vc_core_get_sen_device(cam);
         struct vc_device *device = to_vc_device(sd);
-        int ret;
         int ret = 0;
 
         switch (control->id)
@@ -200,7 +207,7 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
                 return 0; // TODO
 
         case V4L2_CID_EXPOSURE:
-                return vc_sen_set_exposure(cam, (control->value  * vc_core_get_time_per_line_ns(cam)) / 1000);
+                return vc_sen_set_exposure(cam, control->value );
 
         case V4L2_CID_ANALOGUE_GAIN:
         case V4L2_CID_GAIN:
@@ -223,8 +230,11 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
                 return vc_mod_set_single_trigger(cam);
 
         case V4L2_CID_VC_BINNING_MODE:
-                ret = vc_core_set_binning_mode(cam, control->value);                
-                vc_sd_update_fmt(device);
+                ret = vc_core_set_binning_mode(cam, control->value);
+                mutex_unlock(&device->mutex);                
+                        vc_sd_update_fmt(device);
+                mutex_lock(&device->mutex);
+
                 return ret;
 
         case V4L2_CID_VC_ROI_POSITION:
@@ -268,7 +278,7 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
 
                 ret = vc_mod_set_mode(cam, &reset);
                 ret |= vc_sen_set_roi(cam);
-                ret |= vc_sen_set_exposure(cam, (cam->state.exposure * vc_core_get_time_per_line_ns(cam)) / 1000);
+                ret |= vc_sen_set_exposure(cam, cam->state.exposure );
                 update_frame_rate_ctrl(cam,device);
                 if (!ret && reset)
                 {
@@ -311,8 +321,12 @@ static int vc_sd_get_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state
 
         mf->code = vc_core_get_format(cam);
         frame = vc_core_get_frame(cam);
-        mf->width = frame->width;
-        mf->height = frame->height;
+
+        __u8 h_scale, v_scale;
+        vc_get_binning_scale(cam, &h_scale, &v_scale);
+        
+        mf->width = frame->width / h_scale;
+        mf->height = frame->height / v_scale;
         mf->field = V4L2_FIELD_NONE;
         mf->colorspace = V4L2_COLORSPACE_SRGB;
 
@@ -327,10 +341,9 @@ static int vc_sd_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state
         struct vc_cam *cam = to_vc_cam(sd);
         struct v4l2_mbus_framefmt *mf = &format->format;
 
-        bool mutex_locked = mutex_is_locked(&device->mutex);
-        if (!mutex_locked) {
-                mutex_lock(&device->mutex);
-        }
+        
+        mutex_lock(&device->mutex);
+        
 
 
         vc_core_set_format(cam, mf->code);
@@ -339,9 +352,8 @@ static int vc_sd_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state
         mf->field = V4L2_FIELD_NONE;
         mf->colorspace = V4L2_COLORSPACE_SRGB;
 
-        if (!mutex_locked) {
-                mutex_unlock(&device->mutex);
-        }
+        mutex_unlock(&device->mutex);
+        
         return 0;
 }
 
@@ -362,15 +374,12 @@ int vc_sd_enum_mbus_code(struct v4l2_subdev *sd, struct v4l2_subdev_state *state
 			return -EINVAL;
 
 		code->code = cam->ctrl.mbus_codes[code->index];
-                printk(KERN_INFO "vc_sd_enum_mbus_code: code->code: %d\n", code->code);
 
 	} else {
 		if (code->index > 0)
 			return -EINVAL;
 
 		code->code = MEDIA_BUS_FMT_SENSOR_DATA;
-                printk(KERN_INFO "vc_sd_enum_mbus_code: code->code: MEDIA_BUS_FMT_SENSOR_DATA\n" );
-
 	}
 
 
@@ -384,9 +393,8 @@ int vc_sd_enum_frame_size(struct v4l2_subdev *sd, struct v4l2_subdev_state *cfg,
 {
         struct vc_device *device = to_vc_device(sd);
         struct vc_cam *cam = to_vc_cam(sd);
-        struct vc_binning *binning = vc_core_get_binning(cam);
-        __u8 h_scale = binning->h_factor == 0 ? 1 : binning->h_factor;
-        __u8 v_scale = binning->v_factor == 0 ? 1 : binning->v_factor;
+        __u8 h_scale, v_scale;
+        vc_get_binning_scale(cam, &h_scale, &v_scale);
         int codeIx;
         if (fse->index != 0)
                 return -EINVAL;
@@ -491,32 +499,36 @@ static int vc_sd_get_selection(struct v4l2_subdev *sd,
 {
     struct vc_device *device = to_vc_device(sd);
     struct vc_cam *cam = to_vc_cam(sd);
-    struct vc_binning *binning = vc_core_get_binning(cam);
-    __u8 h_scale = binning->h_factor == 0 ? 1 : binning->h_factor;
-    __u8 v_scale = binning->v_factor == 0 ? 1 : binning->v_factor;
+    __u8 h_scale, v_scale;
+    vc_get_binning_scale(cam, &h_scale, &v_scale);
 
     struct v4l2_rect r;
-    if (sel->target == V4L2_SEL_TGT_CROP_DEFAULT || sel->target == V4L2_SEL_TGT_CROP_BOUNDS) {
+    switch(sel->target)
+    {
+        case V4L2_SEL_TGT_COMPOSE:
+        case V4L2_SEL_TGT_COMPOSE_DEFAULT:
+        case V4L2_SEL_TGT_COMPOSE_BOUNDS:
+            r.left = cam->ctrl.frame.left / h_scale;
+            r.top = cam->ctrl.frame.top / v_scale;
+            r.width = cam->ctrl.frame.width / h_scale;
+            r.height = cam->ctrl.frame.height / v_scale;
+            sel->r = r;
+            return 0;
+        case V4L2_SEL_TGT_CROP:
+        case V4L2_SEL_TGT_CROP_DEFAULT:
+        case V4L2_SEL_TGT_CROP_BOUNDS:
         r.left = cam->ctrl.frame.left / h_scale;
         r.top = cam->ctrl.frame.top / v_scale;
         r.width = cam->ctrl.frame.width / h_scale;
         r.height = cam->ctrl.frame.height / v_scale;
         sel->r = r;
         return 0;
+
+        
     }
 
-    if (sel->target != V4L2_SEL_TGT_CROP)
-             
-{  
-//              mutex_lock(&device->mutex);
-                sel->r = *vc_sd_get_pad_crop(device, cfg, sel->pad,
-                                                sel->which);
-                // mutex_unlock(&device->mutex);
-
-                return 0;
-        }
-  sel->r = device->crop_rect;
-    return 0;
+   
+    return -1;
 }
 
 static int vc_sd_set_selection(struct v4l2_subdev *sd,
@@ -710,11 +722,7 @@ static int vc_ctrl_init_ctrl_std_menu(struct vc_device *device, struct v4l2_ctrl
         struct device *dev = &client->dev;
         struct v4l2_ctrl *ctrl;
 
-        printk(KERN_INFO "vc_ctrl_init_ctrl_std_menu\n");
-        printk(KERN_INFO "id: %d\n", id);
-        printk(KERN_INFO "items_count: %zu\n", items_count);
         for (size_t i = 0; i < items_count; i++) {
-                printk(KERN_INFO "item[%zu]: %s\n", i, items[i]);
             }
         ctrl = v4l2_ctrl_new_std_menu_items(&device->ctrl_handler, &vc_ctrl_ops, id, items_count - 1, 0, 0, items);
         if (ctrl == NULL)
@@ -935,8 +943,6 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
         struct vc_desc_mode *mode_desc = &cam->desc.modes[cam->state.mode];
 
 
-        printk(KERN_INFO "vc_update_clk_rates\n");
-
         vc_mode *mode;
 
         for(int i = 0; i < MAX_VC_DESC_MODES; i++)
@@ -969,8 +975,6 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
         ctrl_vblank.max = vblank.max;
         ctrl_vblank.def = vblank.def;
 
-        printk(KERN_INFO "vc_update_clk_rates: hmax: %d\n", mode->hmax);
-
         hblank.min = mode->hmax * num_lanes * 2 - cam->state.frame.width ;
         hblank.max = hblank.min + 1000;
         hblank.def = hblank.min;
@@ -982,7 +986,6 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
 
         if(device->ctrl_vblank)
         {
-                printk(KERN_INFO "vc_update_clk_rates: vblank.min: %d\n", vblank.min);
                 device->ctrl_vblank->maximum = vblank.max;
                 device->ctrl_vblank->minimum = vblank.min;
                 device->ctrl_vblank->default_value = vblank.def;
@@ -990,7 +993,6 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
         }
         if(device->ctrl_hblank)
         {
-                printk(KERN_INFO "vc_update_clk_rates: hblank.max: %d\n", hblank.max);
 
                 device->ctrl_hblank->maximum = hblank.max;
                 device->ctrl_hblank->minimum = hblank.min;
@@ -1011,12 +1013,14 @@ static void update_frame_rate_ctrl(struct vc_cam *cam, struct vc_device *device)
 }
 int vc_sd_update_fmt(struct vc_device *device)
 {
-        vc_binning *binning = vc_core_get_binning(&device->cam);
-        __u8 h_scale = binning->h_factor == 0 ? 1 : binning->h_factor;
-        __u8 v_scale = binning->v_factor == 0 ? 1 : binning->v_factor;
+        __u8 h_scale, v_scale;
+        vc_get_binning_scale(&device->cam, &h_scale, &v_scale);
+
         fmt.format.code = device->cam.state.format_code;
         fmt.format.width = device->cam.ctrl.frame.width / h_scale;
         fmt.format.height = device->cam.ctrl.frame.height / v_scale;
+
+        // return 0;
                
 
         return v4l2_subdev_call(&device->sd, pad, set_fmt, NULL, &fmt);
@@ -1043,9 +1047,9 @@ static int vc_sd_init(struct vc_device *device)
         vc_update_clk_rates(device,&device->cam);
         struct v4l2_ctrl *ctrl;
 
-        device->cam.ctrl.exposure.min = (device->cam.ctrl.exposure.min * vc_core_get_time_per_line_ns(&device->cam)) / 1000;
-        device->cam.ctrl.exposure.max = (device->cam.ctrl.exposure.max * vc_core_get_time_per_line_ns(&device->cam)) / 1000;
-        device->cam.ctrl.exposure.def = (device->cam.ctrl.exposure.def * vc_core_get_time_per_line_ns(&device->cam)) / 1000;
+        // device->cam.ctrl.exposure.min = (device->cam.ctrl.exposure.min * vc_core_get_time_per_line_ns(&device->cam)) / 1000;
+        // device->cam.ctrl.exposure.max = (device->cam.ctrl.exposure.max * vc_core_get_time_per_line_ns(&device->cam)) / 1000;
+        // device->cam.ctrl.exposure.def = (device->cam.ctrl.exposure.def * vc_core_get_time_per_line_ns(&device->cam)) / 1000;
 
         // Add controls
         ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_EXPOSURE, &device->cam.ctrl.exposure);
@@ -1070,7 +1074,7 @@ static int vc_sd_init(struct vc_device *device)
         // ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_ANALOGUE_GAIN, &device->cam.ctrl.gain);
         ret |= vc_ctrl_init_ctrl_lc(device, &device->ctrl_handler);
                 // Set the standard format
-        ret |= vc_sd_update_fmt(device);
+        // ret |= vc_sd_update_fmt(device);
         if (ret)
         {
                 vc_err(dev, "%s(): Failed to set format\n", __func__);

@@ -1,0 +1,183 @@
+Factory Details:
+  Rank                     primary (256)
+  Long-name                libcamera Source
+  Klass                    Source/Video
+  Description              Linux Camera source using libcamera
+  Author                   Nicolas Dufresne <nicolas.dufresne@collabora.com>
+
+Plugin Details:
+  Name                     libcamera
+  Description              libcamera capture plugin
+  Filename                 /lib/aarch64-linux-gnu/gstreamer-1.0/libgstlibcamera.so
+  Version                  0.4.0+53-29156679
+  License                  LGPL
+  Source module            libcamera
+  Binary package           libcamera
+  Origin URL               https://libcamera.org
+
+GObject
+ +----GInitiallyUnowned
+       +----GstObject
+             +----GstElement
+                   +----GstLibcameraSrc
+
+Implemented Interfaces:
+  GstChildProxy
+
+Pad Templates:
+  SRC template: 'src'
+    Availability: Always
+    Capabilities:
+      video/x-raw
+      image/jpeg
+      video/x-bayer
+    Type: GstLibcameraPad
+    Pad Properties:
+      stream-role         : The selected stream role
+                            flags: readable, writable, changeable only in NULL or READY state
+                            Enum "GstLibcameraStreamRole" Default: 2, "video-recording"
+                               (1): still-capture    - libcamera::StillCapture
+                               (2): video-recording  - libcamera::VideoRecording
+                               (3): view-finder      - libcamera::Viewfinder
+  
+  SRC template: 'src_%u'
+    Availability: On request
+    Capabilities:
+      video/x-raw
+      image/jpeg
+      video/x-bayer
+    Type: GstLibcameraPad
+    Pad Properties:
+      stream-role         : The selected stream role
+                            flags: readable, writable, changeable only in NULL or READY state
+                            Enum "GstLibcameraStreamRole" Default: 2, "video-recording"
+                               (1): still-capture    - libcamera::StillCapture
+                               (2): video-recording  - libcamera::VideoRecording
+                               (3): view-finder      - libcamera::Viewfinder
+
+Element has no clocking capabilities.
+Element has no URI handling capabilities.
+
+Pads:
+  SRC: 'src'
+    Pad Template: 'src'
+
+Element Properties:
+  ae-constraint-mode  : Specify a constraint mode for the AE algorithm to use. The constraint modes determine how the measured scene brightness is adjusted to reach the desired target exposure. Constraint modes may be platform specific, and not all constraint modes may be supported. 
+                        flags: readable, writable, controllable
+                        Enum "AeConstraintMode" Default: 0, "normal"
+                           (0): normal           - Default constraint mode. This mode aims to balance the exposure of different parts of the image so as to reach a reasonable average level. However, highlights in the image may appear over-exposed and lowlights may appear under-exposed. 
+                           (1): highlight        - Highlight constraint mode. This mode adjusts the exposure levels in order to try and avoid over-exposing the brightest parts (highlights) of an image. Other non-highlight parts of the image may appear under-exposed. 
+                           (2): shadows          - Shadows constraint mode. This mode adjusts the exposure levels in order to try and avoid under-exposing the dark parts (shadows) of an image. Other normally exposed parts of the image may appear over-exposed. 
+                           (3): custom           - Custom constraint mode. 
+  ae-enable           : Enable or disable the AE. See also: exposure-time, analogue-gain. 
+                        flags: readable, writable, controllable
+                        Boolean. Default: false
+  ae-exposure-mode    : Specify an exposure mode for the AE algorithm to use. The exposure modes specify how the desired total exposure is divided between the exposure time and the sensor's analogue gain. They are platform specific, and not all exposure modes may be supported. 
+                        flags: readable, writable, controllable
+                        Enum "AeExposureMode" Default: 0, "normal"
+                           (0): normal           - Default exposure mode. 
+                           (1): short            - Exposure mode allowing only short exposure times. 
+                           (2): long             - Exposure mode allowing long exposure times. 
+                           (3): custom           - Custom exposure mode. 
+  ae-flicker-period   : Manual flicker period in microseconds. This value sets the current flicker period to avoid. It is used when AeFlickerMode is set to FlickerManual. To cancel 50Hz mains flicker, this should be set to 10000 (corresponding to 100Hz), or 8333 (120Hz) for 60Hz mains. Setting the mode to FlickerManual when no AeFlickerPeriod has ever been set means that no flicker cancellation occurs (until the value of this control is updated). Switching to modes other than FlickerManual has no effect on the value of the AeFlickerPeriod control. See also: ae-flicker-mode. 
+                        flags: readable, writable, controllable
+                        Integer. Range: -2147483648 - 2147483647 Default: 0 
+  ae-metering-mode    : Specify a metering mode for the AE algorithm to use. The metering modes determine which parts of the image are used to determine the scene brightness. Metering modes may be platform specific and not all metering modes may be supported. 
+                        flags: readable, writable, controllable
+                        Enum "AeMeteringMode" Default: 0, "centre-weighted"
+                           (0): centre-weighted  - Centre-weighted metering mode. 
+                           (1): spot             - Spot metering mode. 
+                           (2): matrix           - Matrix metering mode. 
+                           (3): custom           - Custom metering mode. 
+  af-metering         : The parts of the image used by the AF algorithm to measure focus. 
+                        flags: readable, writable, controllable
+                        Enum "AfMetering" Default: 0, "auto"
+                           (0): auto             - Let the AF algorithm decide for itself where it will measure focus. 
+                           (1): windows          - Use the rectangles defined by the AfWindows control to measure focus. If no windows are specified the behaviour is platform dependent. 
+  af-mode             : The mode of the AF (autofocus) algorithm. An implementation may choose not to implement all the modes. 
+                        flags: readable, writable, controllable
+                        Enum "AfMode" Default: 0, "manual"
+                           (0): manual           - The AF algorithm is in manual mode. In this mode it will never perform any action nor move the lens of its own accord, but an application can specify the desired lens position using the LensPosition control. The AfState will always report AfStateIdle. If the camera is started in AfModeManual, it will move the focus lens to the position specified by the LensPosition control. This mode is the recommended default value for the AfMode control. External cameras (as reported by the Location property set to CameraLocationExternal) may use a different default value. 
+                           (1): auto             - The AF algorithm is in auto mode. In this mode the algorithm will never move the lens or change state unless the AfTrigger control is used. The AfTrigger control can be used to initiate a focus scan, the results of which will be reported by AfState. If the autofocus algorithm is moved from AfModeAuto to another mode while a scan is in progress, the scan is cancelled immediately, without waiting for the scan to finish. When first entering this mode the AfState will report AfStateIdle. When a trigger control is sent, AfState will report AfStateScanning for a period before spontaneously changing to AfStateFocused or AfStateFailed, depending on the outcome of the scan. It will remain in this state until another scan is initiated by the AfTrigger control. If a scan is cancelled (without changing to another mode), AfState will return to AfStateIdle. 
+                           (2): continuous       - The AF algorithm is in continuous mode. In this mode the lens can re-start a scan spontaneously at any moment, without any user intervention. The AfState still reports whether the algorithm is currently scanning or not, though the application has no ability to initiate or cancel scans, nor to move the lens for itself. However, applications can pause the AF algorithm from continuously scanning by using the AfPause control. This allows video or still images to be captured whilst guaranteeing that the focus is fixed. When set to AfModeContinuous, the system will immediately initiate a scan so AfState will report AfStateScanning, and will settle on one of AfStateFocused or AfStateFailed, depending on the scan result. 
+  af-range            : The range of focus distances that is scanned. An implementation may choose not to implement all the options here. 
+                        flags: readable, writable, controllable
+                        Enum "AfRange" Default: 0, "normal"
+                           (0): normal           - A wide range of focus distances is scanned. Scanned distances cover all the way from infinity down to close distances, though depending on the implementation, possibly not including the very closest macro positions. 
+                           (1): macro            - Only close distances are scanned. 
+                           (2): full             - The full range of focus distances is scanned. This range is similar to AfRangeNormal but includes the very closest macro positions. 
+  af-speed            : Determine whether the AF is to move the lens as quickly as possible or more steadily. For example, during video recording it may be desirable not to move the lens too abruptly, but when in a preview mode (waiting for a still capture) it may be helpful to move the lens as quickly as is reasonably possible. 
+                        flags: readable, writable, controllable
+                        Enum "AfSpeed" Default: 0, "normal"
+                           (0): normal           - Move the lens at its usual speed. 
+                           (1): fast             - Move the lens more quickly. 
+  af-windows          : The focus windows used by the AF algorithm when AfMetering is set to AfMeteringWindows. The units used are pixels within the rectangle returned by the ScalerCropMaximum property. In order to be activated, a rectangle must be programmed with non-zero width and height. Internally, these rectangles are intersected with the ScalerCropMaximum rectangle. If the window becomes empty after this operation, then the window is ignored. If all the windows end up being ignored, then the behaviour is platform dependent. On platforms that support the ScalerCrop control (for implementing digital zoom, for example), no automatic recalculation or adjustment of AF windows is performed internally if the ScalerCrop is changed. If any window lies outside the output image after the scaler crop has been applied, it is up to the application to recalculate them. The details of how the windows are used are platform dependent. We note that when there is more than one AF window, a typical implementation might find the optimal focus position for each one and finally select the window where the focal distance for the objects shown in that part of the image are closest to the camera. 
+                        flags: readable, writable, controllable
+                        Default: "<  >"
+                        GstValueArray of GValues of type "GstValueArray"
+  analogue-gain       : Analogue gain value applied in the sensor device. The value of the control specifies the gain multiplier applied to all colour channels. This value cannot be lower than 1.0. Setting this value means that it is now fixed and the AE algorithm may not change it. Setting it back to zero returns it to the control of the AE algorithm. See also: exposure-time, ae-enable. Todo: Document the interactions between AeEnable and setting a fixed value for this control. Consider interactions with other AE features, such as aperture and aperture/shutter priority mode, and decide if control of which features should be automatically adjusted shouldn't better be handled through a separate AE mode control. 
+                        flags: readable, writable, controllable
+                        Float. Range:   -3.402823e+38 -    3.402823e+38 Default:               0 
+  awb-enable          : Enable or disable the AWB. When AWB is enabled, the algorithm estimates the colour temperature of the scene and computes colour gains and the colour correction matrix automatically. The computed colour temperature, gains and correction matrix are reported in metadata. The corresponding controls are ignored if set in a request. When AWB is disabled, the colour temperature, gains and correction matrix are not updated automatically and can be set manually in requests. See also: colour-correction-matrix. See also: colour-gains. See also: colour-temperature. 
+                        flags: readable, writable, controllable
+                        Boolean. Default: false
+  awb-mode            : Specify the range of illuminants to use for the AWB algorithm. The modes supported are platform specific, and not all modes may be supported. 
+                        flags: readable, writable, controllable
+                        Enum "AwbMode" Default: 0, "auto"
+                           (0): auto             - Search over the whole colour temperature range. 
+                           (1): incandescent     - Incandescent AWB lamp mode. 
+                           (2): tungsten         - Tungsten AWB lamp mode. 
+                           (3): fluorescent      - Fluorescent AWB lamp mode. 
+                           (4): indoor           - Indoor AWB lighting mode. 
+                           (5): daylight         - Daylight AWB lighting mode. 
+                           (6): cloudy           - Cloudy AWB lighting mode. 
+                           (7): custom           - Custom AWB mode. 
+  brightness          : Specify a fixed brightness parameter. Positive values (up to 1.0) produce brighter images; negative values (up to -1.0) produce darker images and 0.0 leaves pixels unchanged. 
+                        flags: readable, writable, controllable
+                        Float. Range:   -3.402823e+38 -    3.402823e+38 Default:               0 
+  camera-name         : Select by name which camera to use.
+                        flags: readable, writable, changeable only in NULL or READY state
+                        String. Default: null
+  colour-correction-matrix: The 3x3 matrix that converts camera RGB to sRGB within the imaging pipeline. This should describe the matrix that is used after pixels have been white-balanced, but before any gamma transformation. The 3x3 matrix is stored in conventional reading order in an array of 9 floating point values. ColourCorrectionMatrix can only be applied in a Request when the AWB is  disabled. See also: awb-enable. See also: colour-temperature. 
+                        flags: readable, writable, controllable
+                        Default: "<  >"
+                        GstValueArray of GValues of type "gfloat"
+  colour-gains        : Pair of gain values for the Red and Blue colour channels, in that order. ColourGains can only be applied in a Request when the AWB is disabled. If ColourGains is set in a request but ColourTemperature is not, the implementation shall calculate and set the ColourTemperature based on the ColourGains. See also: awb-enable. See also: colour-temperature. 
+                        flags: readable, writable, controllable
+                        Default: "<  >"
+                        GstValueArray of GValues of type "gfloat"
+  contrast            : Specify a fixed contrast parameter. Normal contrast is given by the value 1.0; larger values produce images with more contrast. 
+                        flags: readable, writable, controllable
+                        Float. Range:   -3.402823e+38 -    3.402823e+38 Default:               0 
+  digital-gain        : Digital gain value applied during the processing steps applied to the image as captured from the sensor. The global digital gain factor is applied to all the colour channels of the RAW image. Different pipeline models are free to specify how the global gain factor applies to each separate channel. If an imaging pipeline applies digital gain in distinct processing steps, this value indicates their total sum. Pipelines are free to decide how to adjust each processing step to respect the received gain factor and shall report their total value in the request metadata. 
+                        flags: readable, writable, controllable
+                        Float. Range:   -3.402823e+38 -    3.402823e+38 Default:               0 
+  exposure-time       : Exposure time for the frame applied in the sensor device. This value is specified in micro-seconds. Setting this value means that it is now fixed and the AE algorithm may not change it. Setting it back to zero returns it to the control of the AE algorithm. See also: analogue-gain, ae-enable. Todo: Document the interactions between AeEnable and setting a fixed value for this control. Consider interactions with other AE features, such as aperture and aperture/shutter priority mode, and decide if control of which features should be automatically adjusted shouldn't better be handled through a separate AE mode control. 
+                        flags: readable, writable, controllable
+                        Integer. Range: -2147483648 - 2147483647 Default: 0 
+  exposure-value      : Specify an Exposure Value (EV) parameter. The EV parameter will only be applied if the AE algorithm is currently enabled. By convention EV adjusts the exposure as log2. For example EV = [-2, -1, -0.5, 0, 0.5, 1, 2] results in an exposure adjustment of [1/4x, 1/2x, 1/sqrt(2)x, 1x, sqrt(2)x, 2x, 4x]. See also: ae-enable. 
+                        flags: readable, writable, controllable
+                        Float. Range:   -3.402823e+38 -    3.402823e+38 Default:               0 
+  gamma               : Specify a fixed gamma value. The default gamma value must be 2.2 which closely mimics sRGB gamma. Note that this is camera gamma, so it is applied as 1.0/gamma. 
+                        flags: readable, writable, controllable
+                        Float. Range:   -3.402823e+38 -    3.402823e+38 Default:               0 
+  lens-position       : Set and report the focus lens position. This control instructs the lens to move to a particular position and also reports back the position of the lens for each frame. The LensPosition control is ignored unless the AfMode is set to AfModeManual, though the value is reported back unconditionally in all modes. This value, which is generally a non-integer, is the reciprocal of the focal distance in metres, also known as dioptres. That is, to set a focal distance D, the lens position LP is given by \f$LP = \frac{1\mathrm{m}}{D}\f$ For example: - 0 moves the lens to infinity. - 0.5 moves the lens to focus on objects 2m away. - 2 moves the lens to focus on objects 50cm away. - And larger values will focus the lens closer. The default value of the control should indicate a good general position for the lens, often corresponding to the hyperfocal distance (the closest position for which objects at infinity are still acceptably sharp). The minimum will often be zero (meaning infinity), and the maximum value defines the closest focus position. Todo: Define a property to report the Hyperfocal distance of calibrated lenses. 
+                        flags: readable, writable, controllable
+                        Float. Range:   -3.402823e+38 -    3.402823e+38 Default:               0 
+  name                : The name of the object
+                        flags: readable, writable
+                        String. Default: "libcamerasrc0"
+  parent              : The parent of the object
+                        flags: readable, writable
+                        Object of type "GstObject"
+  saturation          : Specify a fixed saturation parameter. Normal saturation is given by the value 1.0; larger values produce more saturated colours; 0.0 produces a greyscale image. 
+                        flags: readable, writable, controllable
+                        Float. Range:   -3.402823e+38 -    3.402823e+38 Default:               0 
+  scaler-crop         : Sets the image portion that will be scaled to form the whole of the final output image. The (x,y) location of this rectangle is relative to the PixelArrayActiveAreas that is being used. The units remain native sensor pixels, even if the sensor is being used in a binning or skipping mode. This control is only present when the pipeline supports scaling. Its maximum valid value is given by the properties::ScalerCropMaximum property, and the two can be used to implement digital zoom. 
+                        flags: readable, writable, controllable
+                        Default: "<  >"
+                        GstValueArray of GValues of type "gint"
+  sharpness           : Intensity of the sharpening applied to the image. A value of 0.0 means no sharpening. The minimum value means minimal sharpening, and shall be 0.0 unless the camera can't disable sharpening completely. The default value shall give a "reasonable" level of sharpening, suitable for most use cases. The maximum value may apply extremely high levels of sharpening, higher than anyone could reasonably want. Negative values are not allowed. Note also that sharpening is not applied to raw streams. 
+                        flags: readable, writable, controllable
+                        Float. Range:   -3.402823e+38 -    3.402823e+38 Default:               0 
