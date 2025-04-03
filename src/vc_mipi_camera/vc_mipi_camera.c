@@ -211,7 +211,7 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
 
         case V4L2_CID_ANALOGUE_GAIN:
         case V4L2_CID_GAIN:
-                return vc_sen_set_gain(cam, control->value, false);
+                return vc_sen_set_gain(cam, control->value, true);
 
         case V4L2_CID_BLACK_LEVEL:
                 return vc_sen_set_blacklevel(cam, control->value);
@@ -282,7 +282,7 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
                 update_frame_rate_ctrl(cam,device);
                 if (!ret && reset)
                 {
-                        ret |= vc_sen_set_gain(cam, cam->state.gain, false);
+                        ret |= vc_sen_set_gain(cam, cam->state.gain, true);
                         ret |= vc_sen_set_blacklevel(cam, cam->state.blacklevel);
                 }
 
@@ -1071,10 +1071,7 @@ static int vc_sd_init(struct vc_device *device)
         ret |= vc_ctrl_init_ctrl_lfreq(device, &device->ctrl_handler, V4L2_CID_LINK_FREQ, &linkfreq);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_hblank,  &device->ctrl_hblank);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_vblank,  &device->ctrl_vblank);
-        // ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_ANALOGUE_GAIN, &device->cam.ctrl.gain);
         ret |= vc_ctrl_init_ctrl_lc(device, &device->ctrl_handler);
-                // Set the standard format
-        // ret |= vc_sd_update_fmt(device);
         if (ret)
         {
                 vc_err(dev, "%s(): Failed to set format\n", __func__);
