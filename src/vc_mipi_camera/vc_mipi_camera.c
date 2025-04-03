@@ -322,11 +322,9 @@ static int vc_sd_get_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state
         mf->code = vc_core_get_format(cam);
         frame = vc_core_get_frame(cam);
 
-        __u8 h_scale, v_scale;
-        vc_get_binning_scale(cam, &h_scale, &v_scale);
         
-        mf->width = frame->width / h_scale;
-        mf->height = frame->height / v_scale;
+        mf->width = frame->width;
+        mf->height = frame->height;
         mf->field = V4L2_FIELD_NONE;
         mf->colorspace = V4L2_COLORSPACE_SRGB;
 
