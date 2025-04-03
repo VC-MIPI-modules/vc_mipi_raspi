@@ -40,7 +40,6 @@ add_config ()
     if [ -d /usr/src/vc-mipi-driver-bcm2712-${VERSION}/overlays ]; then
         echo "Copying overlay files"
         cp -rf /usr/src/vc-mipi-driver-bcm2712-${VERSION}/overlays /boot/firmware/ || true
-        cp -rf /usr/src/vc-mipi-driver-bcm2712-${VERSION}/overlays/config_vc-mipi-driver-bcm2712.txt /boot/firmware/ || true
 
     fi
 
@@ -51,6 +50,10 @@ add_config ()
         if [ -d /usr/src/vc-mipi-driver-bcm2712-${VERSION}/overlays ]; then
         echo "Copying overlay files"
         cp -rf /usr/src/vc-mipi-driver-bcm2712-${VERSION}/overlays /boot/firmware/ || true
+    fi
+    if [ -f /usr/share/vc-mipi-driver-bcm2712-dkms/overlays/config_vc-mipi-driver-bcm2712.txt ]; then
+         echo "Copying config file config_vc-mipi-driver-bcm2712.txt"
+         cp -f /usr/share/vc-mipi-driver-bcm2712-dkms/overlays/config_vc-mipi-driver-bcm2712.txt /boot/firmware/ || true
     fi
 
 

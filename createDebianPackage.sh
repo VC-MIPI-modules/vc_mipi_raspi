@@ -22,5 +22,9 @@ envsubst '$VERSION_DEB_PACKAGE' < debian_package/postrm > build/debian/postrm
 envsubst '$VERSION_DEB_PACKAGE' < debian_package/rules > build/debian/rules
 envsubst < debian_package/vc-mipi-driver-bcm2712.install > build/debian/vc-mipi-driver-bcm2712.install 
 
+chmod +x build/debian/postinst
+chmod +x build/debian/postrm
+chmod +x build/debian/rules
+
 cd build
 sudo -E dpkg-buildpackage -us -uc -b
