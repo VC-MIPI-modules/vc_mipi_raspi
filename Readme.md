@@ -38,6 +38,11 @@ the sensors are:
 
 Running dpkg-buildpackage by script creates debian package
 
+If different linux headers are used, 
+the path can be specified by environmental variable ```KERNEL_HEADERS```
+I.e. if the linux kernel is built from sources, 
+the path is set by ```KERNEL_HEADERS=/path/to/linux-gitrepo```
+
 ## Requirements
 ```
 sudo apt-get install debhelper-compat  dkms dh-dkms debhelper  linux-headers-generic

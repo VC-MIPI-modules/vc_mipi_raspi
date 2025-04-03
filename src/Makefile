@@ -58,8 +58,7 @@ overlays/%.dtbo: overlays/%.dts
 overlays/vc-mipi-bcm2712-cam0.dtbo: overlays/vc-mipi-bcm2712-cam0-overlay.dts
 	dtc -W no-unit_address_vs_reg -@ -I dts -O dtb  -o $@  $<
 
-KERNEL_HEADERS := /home/vc/linux
-
+KERNEL_HEADERS ?= /lib/modules/$(shell uname -r)/build
 # Debug information
 $(info KERNEL_HEADERS=$(KERNEL_HEADERS))
 $(info Checking for required files in $(KERNEL_HEADERS)...)

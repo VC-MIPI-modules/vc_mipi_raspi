@@ -14,3 +14,8 @@ usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/.Module.symvers.cmd
 usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/modules.order
 usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/**/*.dts
 boot/firmware/config_vc-mipi-driver-bcm2712.txt
+
+
+usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/**/*.md
+usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/vc_mipi_core/doc
+

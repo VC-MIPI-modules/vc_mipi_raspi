@@ -3,16 +3,15 @@ mkdir -p build
 
 # Set version if not set
 if [ -z "$VERSION_DEB_PACKAGE" ]; then
-    export VERSION_DEB_PACKAGE="0.5.3"
+    export VERSION_DEB_PACKAGE="0.5.6"
 fi
 # Delete v from version
 export VERSION_DEB_PACKAGE=$(echo $VERSION_DEB_PACKAGE | sed 's/v//')
 
-
 cp -r debian_package build/debian
 mkdir -p build/debian
 cp -r src build/
-
+DEB_BUILD_OPTIONS="KERNEL_HEADERS=$KERNEL_HEADERS" 
 
 envsubst '$VERSION_DEB_PACKAGE' < debian_package/changelog > build/debian/changelog
 envsubst '$VERSION_DEB_PACKAGE' < dkms.conf > build/dkms.conf
@@ -24,4 +23,4 @@ envsubst '$VERSION_DEB_PACKAGE' < debian_package/rules > build/debian/rules
 envsubst < debian_package/vc-mipi-driver-bcm2712.install > build/debian/vc-mipi-driver-bcm2712.install 
 
 cd build
-sudo dpkg-buildpackage -us -uc -b
+sudo -E dpkg-buildpackage -us -uc -b

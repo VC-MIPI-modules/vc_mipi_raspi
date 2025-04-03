@@ -1,4 +1,6 @@
 #!/usr/bin/make -f
+
+KERNEL_HEADERS ?= $(shell echo $(DEB_BUILD_OPTIONS) | grep -oP 'KERNEL_HEADERS=\K[^ ]+')
 %:
 	dh $@
 
@@ -9,10 +11,9 @@ override_dh_auto_build:
 	cd src && $(MAKE) dtbo
 
 override_dh_auto_install:
-	echo "DEBUG: NAME is vc-mipi-driver-bcm2712"
+
 	# Divert the files to prevent dpkg from making backup links
 	dpkg-divert --local --rename --add /boot/firmware/config_vc-mipi-driver-bcm2712.txt
-
 	# Install to tmp directory with verbose output
 	mkdir -p $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/
 	mkdir -p $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-bcm2712-dkms/overlays/
