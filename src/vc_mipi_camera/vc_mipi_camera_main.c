@@ -1,16 +1,7 @@
-#include "../vc_mipi_core/vc_mipi_core.h"
-#include <linux/module.h>
-#include <linux/gpio/consumer.h>
-#include <linux/pm_runtime.h>
-#include <linux/version.h>
-#include <linux/of_graph.h> 
-
-#include <media/v4l2-subdev.h>
-#include <media/v4l2-ctrls.h>
-#include <media/v4l2-fwnode.h>
-#include <media/v4l2-event.h>
+#include "vc_mipi_camera_extras.h"
 
 #define VERSION "0.5.3"
+int debug = 3;  
 
 // --- Prototypes --------------------------------------------------------------
 static int vc_sd_s_power(struct v4l2_subdev *sd, int on);
@@ -37,57 +28,6 @@ int vc_ctrl_s_ctrl(struct v4l2_ctrl *ctrl);
 
 // --- Structures --------------------------------------------------------------
 
-enum private_cids
-{
-        V4L2_CID_VC_TRIGGER_MODE = V4L2_CID_USER_BASE | 0xfff0, // TODO FOR NOW USE 0xfff0 offset
-        V4L2_CID_VC_IO_MODE,
-        V4L2_CID_VC_FRAME_RATE,
-        V4L2_CID_VC_SINGLE_TRIGGER,
-        V4L2_CID_VC_BINNING_MODE,
-        V4L2_CID_VC_ROI_POSITION,
-};
-
-enum pad_types {
-	IMAGE_PAD,
-	METADATA_PAD,
-	NUM_PADS
-};
-struct vc_control_int_menu {
-        struct v4l2_ctrl *ctrl;
-        const struct v4l2_ctrl_ops *ops;
-};
-struct vc_device
-{
-        struct v4l2_subdev sd;
-        struct v4l2_ctrl_handler ctrl_handler;
-        struct media_pad pad;
-        // struct gpio_desc *power_gpio;
-        int power_on;
-        struct mutex mutex;
-
-        struct v4l2_rect crop_rect;
-        struct v4l2_mbus_framefmt format;
-
-        struct v4l2_ctrl *ctrl_hblank;
-        struct v4l2_ctrl *ctrl_vblank;
-        
-
-
-
-        struct vc_cam cam;
-};
-static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam);
-
-static inline struct vc_device *to_vc_device(struct v4l2_subdev *sd)
-{
-        return container_of(sd, struct vc_device, sd);
-}
-
-static inline struct vc_cam *to_vc_cam(struct v4l2_subdev *sd)
-{
-        struct vc_device *device = to_vc_device(sd);
-        return &device->cam;
-}
 
 
 static        struct vc_control hblank; 
@@ -202,7 +142,9 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
         case V4L2_CID_VBLANK:
                 vc_core_set_vmax_overwrite(cam,(cam->state.frame.height + control->value));
                 vc_sen_write_vmax(&cam->ctrl, cam->state.vmax_overwrite);
+                return 0;
         case V4L2_CID_HFLIP:
+
         case V4L2_CID_VFLIP:
                 return 0; // TODO
 
@@ -239,6 +181,8 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
 
         case V4L2_CID_VC_ROI_POSITION:
                 return vc_core_live_roi(cam, control->value);
+        case V4L2_CID_TEST_PATTERN:
+                return imx335_update_test_pattern(cam, control->value);
 
 
         default:
@@ -714,23 +658,7 @@ static int vc_ctrl_init_ctrl_lfreq(struct vc_device *device, struct v4l2_ctrl_ha
         return 0;
 }
 
-static int vc_ctrl_init_ctrl_std_menu(struct vc_device *device, struct v4l2_ctrl_handler *hdl, int id, const char * const items[], size_t items_count)
-{
-        struct i2c_client *client = device->cam.ctrl.client_sen;
-        struct device *dev = &client->dev;
-        struct v4l2_ctrl *ctrl;
 
-        for (size_t i = 0; i < items_count; i++) {
-            }
-        ctrl = v4l2_ctrl_new_std_menu_items(&device->ctrl_handler, &vc_ctrl_ops, id, items_count - 1, 0, 0, items);
-        if (ctrl == NULL)
-        {
-                vc_err(dev, "%s(): Failed to init 0x%08x ctrl\n", __func__, id);
-                return -EIO;
-        }
-
-        return 0;
-}
 
 static int vc_ctrl_init_ctrl_lc(struct vc_device *device, struct v4l2_ctrl_handler *hdl)
 {
@@ -1070,6 +998,11 @@ static int vc_sd_init(struct vc_device *device)
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_hblank,  &device->ctrl_hblank);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_vblank,  &device->ctrl_vblank);
         ret |= vc_ctrl_init_ctrl_lc(device, &device->ctrl_handler);
+
+        ret |= imx335_init_control(device, &device->ctrl_handler, &vc_ctrl_ops);
+
+
+
         if (ret)
         {
                 vc_err(dev, "%s(): Failed to set format\n", __func__);
@@ -1105,7 +1038,6 @@ static int vc_probe(struct i2c_client *client)
 
         cam = &device->cam;
         cam->ctrl.client_sen = client;
-
 
         vc_set_power(device, 1);
 
@@ -1217,6 +1149,3 @@ MODULE_DESCRIPTION("Vision Components GmbH - VC MIPI CSI-2 driver");
 MODULE_AUTHOR("Peter Martienssen, Liquify Consulting <peter.martienssen@liquify-consulting.de>");
 MODULE_AUTHOR("Michael Steinel, Vision Components GmbH <mipi-tech@vision-components.com>");
 MODULE_LICENSE("GPL v2");
-
-module_param(debug, int, 0644);
-MODULE_PARM_DESC(debug, "Debug level (0-6)");

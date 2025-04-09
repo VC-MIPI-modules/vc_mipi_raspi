@@ -7,10 +7,12 @@ PACKAGE_VERSION="${VERSION_DEB_PACKAGE}"
 
 case "$1" in
     remove|upgrade|deconfigure)
-        # Only remove DKMS module
+        # Only remove DKMS module if the source directory exists
         if [ -d "/var/lib/dkms/${PACKAGE_NAME}/${PACKAGE_VERSION}" ]; then
             echo "Removing old driver version ${PACKAGE_NAME}-${PACKAGE_VERSION} from DKMS"
             dkms remove -m "${PACKAGE_NAME}" -v "${PACKAGE_VERSION}" --all || true
+        else
+            echo "DKMS source directory for ${PACKAGE_NAME}-${PACKAGE_VERSION} does not exist. Skipping removal."
         fi
     ;;
 esac
