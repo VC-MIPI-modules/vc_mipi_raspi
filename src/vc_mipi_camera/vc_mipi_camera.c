@@ -12,6 +12,7 @@
 
 #define VERSION "0.5.3"
 
+int debug = 3;
 // --- Prototypes --------------------------------------------------------------
 static int vc_sd_s_power(struct v4l2_subdev *sd, int on);
 static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control);
@@ -202,6 +203,7 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
         case V4L2_CID_VBLANK:
                 vc_core_set_vmax_overwrite(cam,(cam->state.frame.height + control->value));
                 vc_sen_write_vmax(&cam->ctrl, cam->state.vmax_overwrite);
+                return 0;
         case V4L2_CID_HFLIP:
         case V4L2_CID_VFLIP:
                 return 0; // TODO
@@ -427,75 +429,13 @@ int vc_sd_enum_frame_size(struct v4l2_subdev *sd, struct v4l2_subdev_state *cfg,
         return 0;
 }
 
-static struct v4l2_mbus_framefmt *__cam_get_pad_format(struct v4l2_subdev *sd,
-                                                       struct v4l2_subdev_state *cfg,
-                                                       unsigned int pad, enum v4l2_subdev_format_whence which)
-{
-        struct vc_device *device = to_vc_device(sd);
-        struct vc_cam *cam __maybe_unused = to_vc_cam(sd);
-        switch (which)
-        {
-        case V4L2_SUBDEV_FORMAT_TRY:
-#if KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE
-                return v4l2_subdev_get_try_format(sd, cfg, pad);
 
-#else
-                return v4l2_subdev_get_try_format(sd, cfg, pad);
-
-#endif
-        case V4L2_SUBDEV_FORMAT_ACTIVE:
-                return &device->format;
-        default:
-                return NULL;
-        }
-}
-
-static struct v4l2_rect *__maybe_unused __cam_get_pad_crop(struct v4l2_subdev *sd,
-                                                           struct v4l2_subdev_state *cfg,
-                                                           unsigned int pad, enum v4l2_subdev_format_whence which)
-{
-        struct vc_device *device = to_vc_device(sd);
-        struct vc_cam *cam __maybe_unused = to_vc_cam(sd);
-        switch (which)
-        {
-        case V4L2_SUBDEV_FORMAT_TRY:
-#if KERNEL_VERSION(6, 0, 0) <= LINUX_VERSION_CODE
-                return v4l2_subdev_get_try_crop(sd, cfg, pad);
-
-#else
-                return v4l2_subdev_get_try_crop(sd, cfg, pad);
-
-#endif
-        case V4L2_SUBDEV_FORMAT_ACTIVE:
-                return &device->crop_rect;
-        default:
-                return NULL;
-        }
-}
-
-
-static const struct v4l2_rect *
-vc_sd_get_pad_crop(struct vc_device *device,
-		      struct v4l2_subdev_state *sd_state,
-		      unsigned int pad, enum v4l2_subdev_format_whence which)
-{
-	switch (which) {
-	case V4L2_SUBDEV_FORMAT_TRY:
-		return v4l2_subdev_get_try_crop(&device->sd, sd_state, pad);
-	case V4L2_SUBDEV_FORMAT_ACTIVE:
-                device->crop_rect = vc_sen_get_roi(&device->cam);
-		return &device->crop_rect;
-	}
-
-	return NULL;
-}
 
 
 static int vc_sd_get_selection(struct v4l2_subdev *sd,
                                struct v4l2_subdev_state *cfg,
                                struct v4l2_subdev_selection *sel)
 {
-    struct vc_device *device = to_vc_device(sd);
     struct vc_cam *cam = to_vc_cam(sd);
     __u8 h_scale, v_scale;
     vc_get_binning_scale(cam, &h_scale, &v_scale);
@@ -714,23 +654,23 @@ static int vc_ctrl_init_ctrl_lfreq(struct vc_device *device, struct v4l2_ctrl_ha
         return 0;
 }
 
-static int vc_ctrl_init_ctrl_std_menu(struct vc_device *device, struct v4l2_ctrl_handler *hdl, int id, const char * const items[], size_t items_count)
-{
-        struct i2c_client *client = device->cam.ctrl.client_sen;
-        struct device *dev = &client->dev;
-        struct v4l2_ctrl *ctrl;
+// static int vc_ctrl_init_ctrl_std_menu(struct vc_device *device, struct v4l2_ctrl_handler *hdl, int id, const char * const items[], size_t items_count)
+// {
+//         struct i2c_client *client = device->cam.ctrl.client_sen;
+//         struct device *dev = &client->dev;
+//         struct v4l2_ctrl *ctrl;
 
-        for (size_t i = 0; i < items_count; i++) {
-            }
-        ctrl = v4l2_ctrl_new_std_menu_items(&device->ctrl_handler, &vc_ctrl_ops, id, items_count - 1, 0, 0, items);
-        if (ctrl == NULL)
-        {
-                vc_err(dev, "%s(): Failed to init 0x%08x ctrl\n", __func__, id);
-                return -EIO;
-        }
+//         for (size_t i = 0; i < items_count; i++) {
+//             }
+//         ctrl = v4l2_ctrl_new_std_menu_items(&device->ctrl_handler, &vc_ctrl_ops, id, items_count - 1, 0, 0, items);
+//         if (ctrl == NULL)
+//         {
+//                 vc_err(dev, "%s(): Failed to init 0x%08x ctrl\n", __func__, id);
+//                 return -EIO;
+//         }
 
-        return 0;
-}
+//         return 0;
+// }
 
 static int vc_ctrl_init_ctrl_lc(struct vc_device *device, struct v4l2_ctrl_handler *hdl)
 {

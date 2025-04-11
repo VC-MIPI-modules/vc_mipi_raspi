@@ -8,7 +8,7 @@
 ################################################################################
 DTC ?= dtc
 DTC_FLAGS ?= -@ -I dts -O dtb -Wno-unit_address_vs_reg
-
+EXTRA_CFLAGS += -Wno-missing-prototypes
 
 
 SENSOR_NAMES := vc-mipi-bcm2712-cam0
@@ -77,7 +77,7 @@ $(error Kernel headers not found. Please install them with 'sudo apt-get install
 endif
 
 build:
-	$(MAKE) -C $(KERNEL_HEADERS) M=$(PWD) modules
+	EXTRA_CFLAGS=$(EXTRA_CFLAGS) $(MAKE) -C $(KERNEL_HEADERS) M=$(PWD) modules
 
 all: $(DEVICETREES) build
 
