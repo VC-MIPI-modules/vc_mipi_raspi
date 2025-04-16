@@ -379,6 +379,30 @@ dialog_set_roi()
     set_roi "$subdev" "$videodev" "$width" "$height"
     
 }
+dialog_set_debuglevel()
+{
+
+
+    currentlevel=$(cat "/sys/module/vc_mipi_core/parameters/debug")
+
+    echo "Current debug level: $currentlevel"
+
+    # Use whiptail to prompt the user to enter debug level
+    debuglevel=$(whiptail --menu "At least Logging level:" 15 200 6  --default-item "$currentlevel" \
+     "1" "Errors" \
+     "2" "Warnings" \
+     "3" "Notices" \
+     "4" "Infos" \
+     "5" "Debug" \
+     "6" "Registers" \
+        3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        break
+    fi 
+    echo "Selected subdevice: $subdev"
+    echo "Debug level: $debuglevel"
+    echo $debuglevel | sudo tee /sys/module/vc_mipi_core/parameters/debug
+}
 dialog_set_format() 
 {
        local videodev=$1
@@ -477,6 +501,8 @@ configure_subdev_controls() {
         menu_options+=("Set ROI" "Set the region of interest")
         menu_options+=("Configure Device Tree" "Configure the lanes for the mipi sensors")
         menu_options+=("Format" "Set the format of the camera")
+        menu_options+=("Logging" "Set logging level")
+
         for control in $controls; do
             if ! v4l2-ctl --device=$subdev --get-ctrl=$control;then
                 continue
@@ -496,6 +522,10 @@ configure_subdev_controls() {
         fi    
         if([ "$selected_control" == "Set ROI" ]); then
             dialog_set_roi "$subdev" "$videodev"
+            continue
+        fi
+        if([ "$selected_control" == "Logging" ]); then
+            dialog_set_debuglevel 
             continue
         fi
         if([ "$selected_control" == "Configure Device Tree" ]); then
