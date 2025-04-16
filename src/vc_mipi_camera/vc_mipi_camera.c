@@ -278,8 +278,7 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
                         return ret;
                 }
 
-                ret = vc_mod_set_mode(cam, &reset);
-                ret |= vc_sen_set_roi(cam);
+               
                 ret |= vc_sen_set_exposure(cam, cam->state.exposure );
                 update_frame_rate_ctrl(cam,device);
                 if (!ret && reset)
@@ -1015,6 +1014,8 @@ static int vc_sd_init(struct vc_device *device)
                 vc_err(dev, "%s(): Failed to set format\n", __func__);
                 return ret;
         }
+
+        vc_sd_update_fmt(device);
 
         return 0;
 }
