@@ -392,6 +392,7 @@ int vc_sd_enum_frame_size(struct v4l2_subdev *sd, struct v4l2_subdev_state *cfg,
         struct vc_cam *cam = to_vc_cam(sd);
         __u8 h_scale, v_scale;
         vc_get_binning_scale(cam, &h_scale, &v_scale);
+        vc_frame *frame = vc_core_get_frame(cam);
         int codeIx;
         if (fse->index != 0)
                 return -EINVAL;
@@ -417,9 +418,9 @@ int vc_sd_enum_frame_size(struct v4l2_subdev *sd, struct v4l2_subdev_state *cfg,
         // Frame sizes are the same for different formats
 
         fse->min_width = 32;
-        fse->max_width = fse->min_width / h_scale;
+        fse->max_width = frame->width / h_scale;
         fse->min_height = 32;
-        fse->max_height = fse->min_height /v_scale;
+        fse->max_height = frame->height /v_scale;
 
         mutex_unlock(&device->mutex);
 
@@ -1002,6 +1003,7 @@ static int vc_probe(struct i2c_client *client)
         cam = &device->cam;
         cam->ctrl.client_sen = client;
 
+	mutex_init(&device->mutex);
 
         vc_set_power(device, 1);
 
