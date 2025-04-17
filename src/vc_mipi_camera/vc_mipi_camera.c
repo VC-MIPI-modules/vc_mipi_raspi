@@ -69,8 +69,6 @@ struct vc_device
         struct v4l2_rect crop_rect;
         struct v4l2_mbus_framefmt format;
 
-        struct v4l2_ctrl *ctrl_hblank;
-        struct v4l2_ctrl *ctrl_vblank;
         
 
 
@@ -839,28 +837,7 @@ static const struct v4l2_ctrl_config ctrl_blacklevel = {
 };
 
 
-static struct v4l2_ctrl_config ctrl_hblank = {
-        .ops = &vc_ctrl_ops,
-        .id = V4L2_CID_HBLANK, 
-        .name = "Horizontal blanking",
-        .type = V4L2_CTRL_TYPE_INTEGER,
-        .flags = V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-        .min = 0,
-        .max = 100000,
-        .step = 1,
-        .def = 0,
-    };
-static struct v4l2_ctrl_config ctrl_vblank = {
-        .ops = &vc_ctrl_ops,
-        .id = V4L2_CID_VBLANK, 
-        .name = "Vertical blanking",
-        .type = V4L2_CTRL_TYPE_INTEGER,
-        .flags = V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-        .min = 0,
-        .max = 100000,
-        .step = 1,
-        .def = 0,
-    };
+
 struct v4l2_subdev_format fmt = {
         .which = V4L2_SUBDEV_FORMAT_ACTIVE,
         .format = {
@@ -906,36 +883,14 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
         vblank.max = mode->vmax.max;
         vblank.def = mode->vmax.min;
 
-       
 
-        ctrl_vblank.min = vblank.min;
-        ctrl_vblank.max = vblank.max;
-        ctrl_vblank.def = vblank.def;
 
         hblank.min = mode->hmax * num_lanes * 2 - cam->state.frame.width ;
         hblank.max = hblank.min + 1000;
         hblank.def = hblank.min;
 
 
-        ctrl_hblank.max = hblank.max;
-        ctrl_hblank.min = hblank.min;
-        ctrl_hblank.def = hblank.def;
 
-        if(device->ctrl_vblank)
-        {
-                device->ctrl_vblank->maximum = vblank.max;
-                device->ctrl_vblank->minimum = vblank.min;
-                device->ctrl_vblank->default_value = vblank.def;
-                device->ctrl_vblank->val = vblank.min;
-        }
-        if(device->ctrl_hblank)
-        {
-
-                device->ctrl_hblank->maximum = hblank.max;
-                device->ctrl_hblank->minimum = hblank.min;
-                device->ctrl_hblank->default_value = hblank.def;
-                device->ctrl_hblank->val = hblank.min;
-        }
 }
 static void update_frame_rate_ctrl(struct vc_cam *cam, struct vc_device *device)
 {
@@ -1006,8 +961,8 @@ static int vc_sd_init(struct vc_device *device)
 
         ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_PIXEL_RATE, &pixel_rate);
         ret |= vc_ctrl_init_ctrl_lfreq(device, &device->ctrl_handler, V4L2_CID_LINK_FREQ, &linkfreq);
-        ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_hblank,  &device->ctrl_hblank);
-        ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_vblank,  &device->ctrl_vblank);
+        ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_HBLANK,  &hblank);
+        ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_VBLANK,  &vblank);
         ret |= vc_ctrl_init_ctrl_lc(device, &device->ctrl_handler);
         if (ret)
         {
