@@ -4,13 +4,14 @@
 #include <linux/pm_runtime.h>
 #include <linux/version.h>
 #include <linux/of_graph.h> 
+#include <linux/property.h> // For device_property_read_bool()
 
 #include <media/v4l2-subdev.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-event.h>
 
-#define VERSION "0.5.3"
+#define VERSION "0.6.0"
 
 int debug = 3;
 // --- Prototypes --------------------------------------------------------------
@@ -62,18 +63,12 @@ struct vc_device
         struct v4l2_subdev sd;
         struct v4l2_ctrl_handler ctrl_handler;
         struct media_pad pad;
-        // struct gpio_desc *power_gpio;
         int power_on;
         struct mutex mutex;
-
         struct v4l2_rect crop_rect;
         struct v4l2_mbus_framefmt format;
-
-        
-
-
-
         struct vc_cam cam;
+        bool libcamera_enabled;
 };
 static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam);
 
@@ -207,7 +202,16 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
                 return 0; // TODO
 
         case V4L2_CID_EXPOSURE:
-                return vc_sen_set_exposure(cam, control->value );
+                if(device->libcamera_enabled)
+                {
+                        // libcamera's unit for exposure is in lines count
+                        return vc_sen_set_exposure(cam, control->value * vc_core_get_time_per_line_ns(cam) / 1000);
+                }
+                else
+                {
+                        return vc_sen_set_exposure(cam, control->value );
+                }
+      
 
         case V4L2_CID_ANALOGUE_GAIN:
         case V4L2_CID_GAIN:
@@ -542,7 +546,7 @@ static int vc_get_bit_depth(__u8 mipi_format)
 
 
 
-static int __maybe_unused vc_check_hwcfg(struct vc_cam *cam, struct device *dev)
+static int vc_check_hwcfg(struct vc_cam *cam, struct device *dev, struct vc_device *device)
 {
         struct fwnode_handle *endpoint;
         struct v4l2_fwnode_endpoint ep_cfg = {
@@ -560,6 +564,14 @@ static int __maybe_unused vc_check_hwcfg(struct vc_cam *cam, struct device *dev)
         {
                 dev_err(dev, "Could not parse endpoint!\n");
                 goto error_out;
+        }
+
+                // Check if the "libcamera" property is set and true
+        if (device_property_read_bool(dev, "libcamera")) {
+                device->libcamera_enabled = true;
+                dev_info(dev, "libcamera property is set and true\n");
+        } else {
+                dev_err(dev, "libcamera property is not set or false\n");
         }
 
         /* Set and check the number of MIPI CSI2 data lanes */
@@ -851,14 +863,10 @@ struct v4l2_subdev_format fmt = {
 };
 
 
-
-
-static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
+static vc_mode *vc_get_mode(struct vc_cam *cam)
 {
         struct vc_desc_mode *mode_desc = &cam->desc.modes[cam->state.mode];
-
-
-        vc_mode *mode;
+        vc_mode *mode = NULL;
 
         for(int i = 0; i < MAX_VC_DESC_MODES; i++)
         {
@@ -870,6 +878,12 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
                         break;
                 }
         }
+        return mode;
+}
+
+static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
+{
+        vc_mode *mode = vc_get_mode(cam);
         int num_lanes = mode->num_lanes;
         int bit_depth = vc_get_bit_depth(mode->format);
 
@@ -886,8 +900,8 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
 
 
 
-        hblank.min = mode->hmax * num_lanes * 2 - cam->state.frame.width ;
-        hblank.max = hblank.min + 1000;
+        hblank.min = 0 ;
+        hblank.max = 5000;
         hblank.def = hblank.min;
 
 
@@ -940,9 +954,15 @@ static int vc_sd_init(struct vc_device *device)
         vc_update_clk_rates(device,&device->cam);
         struct v4l2_ctrl *ctrl;
 
-        // device->cam.ctrl.exposure.min = (device->cam.ctrl.exposure.min * vc_core_get_time_per_line_ns(&device->cam)) / 1000;
-        // device->cam.ctrl.exposure.max = (device->cam.ctrl.exposure.max * vc_core_get_time_per_line_ns(&device->cam)) / 1000;
-        // device->cam.ctrl.exposure.def = (device->cam.ctrl.exposure.def * vc_core_get_time_per_line_ns(&device->cam)) / 1000;
+
+        if(device->libcamera_enabled)
+        {
+                device->cam.ctrl.exposure.min = 1;
+                device->cam.ctrl.exposure.max = 1000000;
+                device->cam.ctrl.exposure.def = 10;
+        }
+     
+
 
         // Add controls
         ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_EXPOSURE, &device->cam.ctrl.exposure);
@@ -1013,7 +1033,7 @@ static int vc_probe(struct i2c_client *client)
 
 
 
-        ret = vc_check_hwcfg(cam, dev); 
+        ret = vc_check_hwcfg(cam, dev, device); 
 
         if (ret)
                 goto error_power_off;

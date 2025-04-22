@@ -113,6 +113,7 @@ configure_device_tree() {
 
         current_lanes=$(grep "^dtparam="$camera"_lanes" "$config_file" | awk -F 'lanes' '{print $2}')
         current_manu=$(grep "^dtparam="$camera"_manu_" "$config_file" | awk -F '_manu_' '{print $2}')
+        current_libcamera=$(grep "^dtparam="$camera"_libcamera_" "$config_file" | awk -F '_libcamera' '{print $2}')
 
         # Use whiptail to create a menu for selecting the number of lanes
         lanes=$(whiptail --menu "Select the number of lanes:" 15 200 3 --default-item "$current_lanes" --cancel-button "Cancel"\
@@ -133,9 +134,20 @@ configure_device_tree() {
         if [ $? -ne 0 ]; then
             break
         fi 
-          if [ "$manufacturer" != "$current_manu" ]; then
+        if [ "$manufacturer" != "$current_manu" ]; then
             change=true
                 sudo sed -i "s/^dtparam=${camera}_manu_.*/dtparam=${camera}_manu_${manufacturer}/" "$config_file"
+        fi
+        libcamera=$(whiptail --menu "Libcamera support:" 15 200 2  --default-item "$current_libcamera" \
+        "on" "Libcamera support on" \
+        "off" "Libcamera support off" \
+        3>&1 1>&2 2>&3)
+        if [ $? -ne 0 ]; then
+            break
+        fi 
+        if [ "$libcamera" != "$current_libcamera" ]; then
+            change=true
+                sudo sed -i "s/^dtparam=${camera}_libcamera_.*/dtparam=${camera}_libcamera_${libcamera}/" "$config_file"
         fi
     done;
     if [ "$change" = true ]; then   
@@ -476,6 +488,16 @@ dialog_set_format()
     echo "Selected format: $full_mediabusfmt"
     set_format "$videodev" "$full_mediabusfmt"
 }
+
+dialog_get_versions()
+{
+    core_version=$(cat /sys/module/vc_mipi_core/version)
+    modules_version=$(cat /sys/module/vc_mipi_modules/version)
+    camera_version=$(cat /sys/module/vc_mipi_camera/version)
+
+    whiptail --msgbox "vc_mipi_core version:    $core_version\nvc_mipi_modules version: $modules_version\nvc_mipi_camera version:  $camera_version" 15 50 --title "Version Information" 3>&1 1>&2 2>&3
+
+}
  
 
 get_entity_name() {
@@ -502,6 +524,7 @@ configure_subdev_controls() {
         menu_options+=("Configure Device Tree" "Configure the lanes for the mipi sensors")
         menu_options+=("Format" "Set the format of the camera")
         menu_options+=("Logging" "Set logging level")
+        menu_options+=("Version" "Get modules versions")
 
         for control in $controls; do
             if ! v4l2-ctl --device=$subdev --get-ctrl=$control;then
@@ -536,7 +559,10 @@ configure_subdev_controls() {
             dialog_set_format "$videodev"
             continue
         fi
-       
+        if([ "$selected_control" == "Version" ]); then
+            dialog_get_versions 
+            continue
+        fi
 
 
         # Get the current value of the selected control
@@ -592,7 +618,7 @@ echo "No camera detected"
     exit 1
 fi
 # Use whiptail to create a menu with the collected subdevice names
-selected_dev=$(whiptail --menu "Select the sensor" 25 50 16 "${menu_options[@]}" 3>&1 1>&2 2>&3)
+selected_dev=$(whiptail --menu "Select the sensor" 10 60 3 "${menu_options[@]}" 3>&1 1>&2 2>&3)
 if [ $? -ne 0 ]; then
     exit 1
 fi

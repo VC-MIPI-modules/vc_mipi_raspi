@@ -3,15 +3,26 @@ mkdir -p build
 
 # Set version if not set
 if [ -z "$VERSION_DEB_PACKAGE" ]; then
-    export VERSION_DEB_PACKAGE="0.5.7"
+    export VERSION_DEB_PACKAGE="0.6.0"
 fi
 # Delete v from version
 export VERSION_DEB_PACKAGE=$(echo $VERSION_DEB_PACKAGE | sed 's/v//')
+
+VC_CAMERA_FILE="src/vc_mipi_camera/vc_mipi_camera.c"
+VC_CORE_FILE="src/vc_mipi_core/vc_mipi_core.h"
+VC_MODULES_FILE="src/vc_mipi_core/vc_mipi_modules.h"
+
+sed -i "s/^#define VERSION \".*\"/#define VERSION \"$VERSION_DEB_PACKAGE\"/" $VC_CAMERA_FILE
+sed -i "s/^#define VERSION \".*\"/#define VERSION \"$VERSION_DEB_PACKAGE\"/" $VC_CORE_FILE
+sed -i "s/^#define VERSION \".*\"/#define VERSION \"$VERSION_DEB_PACKAGE\"/" $VC_MODULES_FILE
+
 
 cp -r debian_package build/debian
 mkdir -p build/debian
 cp -r src build/
 DEB_BUILD_OPTIONS="KERNEL_HEADERS=$KERNEL_HEADERS" 
+
+
 
 envsubst '$VERSION_DEB_PACKAGE' < debian_package/changelog > build/debian/changelog
 envsubst '$VERSION_DEB_PACKAGE' < dkms.conf > build/dkms.conf
