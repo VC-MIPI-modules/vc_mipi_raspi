@@ -36,6 +36,7 @@ int vc_sd_s_mbus_config(struct v4l2_subdev *sd, struct v4l2_mbus_config *cfg);
 int vc_sd_g_frame_interval(struct v4l2_subdev *sd, struct v4l2_subdev_frame_interval *fi);
 int vc_sd_s_frame_interval(struct v4l2_subdev *sd, struct v4l2_subdev_frame_interval *fi);
 int vc_ctrl_s_ctrl(struct v4l2_ctrl *ctrl);
+static vc_mode *vc_get_mode(struct vc_cam *cam);
 
 // --- Structures --------------------------------------------------------------
 
@@ -183,29 +184,30 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
         struct device *dev = vc_core_get_sen_device(cam);
         struct vc_device *device = to_vc_device(sd);
         int ret = 0;
+        vc_mode *mode = vc_get_mode(cam);
 
         switch (control->id)
         {
 
-        // MS add some CIDs libcamera needs
         case V4L2_CID_HBLANK:
-                vc_core_set_hmax_overwrite(cam,cam->state.frame.width + control->value);
+                vc_core_set_hmax_overwrite(cam, mode->hmax + control->value);
                 vc_sen_set_hmax(cam);
                 return 0;
                 
         case V4L2_CID_VBLANK:
-                vc_core_set_vmax_overwrite(cam,(cam->state.frame.height + control->value));
+                vc_core_set_vmax_overwrite(cam,mode->vmax.def + control->value);
                 vc_sen_write_vmax(&cam->ctrl, cam->state.vmax_overwrite);
                 return 0;
         case V4L2_CID_HFLIP:
         case V4L2_CID_VFLIP:
-                return 0; // TODO
+                return 0; // Currently not planned to be implemented
 
         case V4L2_CID_EXPOSURE:
                 if(device->libcamera_enabled)
                 {
                         // libcamera's unit for exposure is in lines count
-                        return vc_sen_set_exposure(cam, control->value * vc_core_get_time_per_line_ns(cam) / 1000);
+                        vc_sen_set_exposure(cam, control->value * vc_core_get_time_per_line_ns(cam) / 1000);
+                        return 0;
                 }
                 else
                 {
@@ -276,8 +278,8 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
                 if (ret < 0)
                 {
                         pm_runtime_put_noidle(dev);
-                        mutex_unlock(&device->mutex);
-                        return ret;
+                        goto err_unlock;
+
                 }
 
                
@@ -292,23 +294,28 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
                 ret = vc_sen_start_stream(cam);
                 if (ret)
                 {
-                        enable = 0;
-                        vc_sen_stop_stream(cam);
-                        pm_runtime_mark_last_busy(dev);
-                        pm_runtime_put_autosuspend(dev);
+                       goto err_rpm_put;
                 }
         }
         else
         {
+             
                 vc_sen_stop_stream(cam);
-                pm_runtime_mark_last_busy(dev);
-                pm_runtime_put_autosuspend(dev);
+                pm_runtime_put(dev);
         }
 
         state->streaming = enable;
         mutex_unlock(&device->mutex);
 
         return ret;
+  err_rpm_put:
+                enable = 0;
+                vc_sen_stop_stream(cam);
+	        pm_runtime_put(dev);
+  err_unlock:
+                 mutex_unlock(&device->mutex);
+
+	return ret;
 }
 
 // --- v4l2_subdev_pad_ops ---------------------------------------------------
@@ -498,20 +505,19 @@ static int vc_sd_set_selection(struct v4l2_subdev *sd,
 int vc_ctrl_s_ctrl(struct v4l2_ctrl *ctrl)
 {
         struct vc_device *device = container_of(ctrl->handler, struct vc_device, ctrl_handler);
-        // struct i2c_client *client = device->cam.ctrl.client_sen;
+        struct i2c_client *client = device->cam.ctrl.client_sen;
         struct v4l2_control control;
 
         // V4L2 controls values will be applied only when power is already up
-        // if (!pm_runtime_get_if_in_use(&client->dev))
-        // 	return 0;
+        if (!pm_runtime_get_if_in_use(&client->dev))
+        	return 0;
 
-        mutex_lock(&device->mutex);
 
         control.id = ctrl->id;
         control.value = ctrl->val;
         vc_sd_s_ctrl(&device->sd, &control);
 
-        mutex_unlock(&device->mutex);
+	pm_runtime_put(&client->dev);
 
         return 0;
 }
@@ -566,12 +572,11 @@ static int vc_check_hwcfg(struct vc_cam *cam, struct device *dev, struct vc_devi
                 goto error_out;
         }
 
-                // Check if the "libcamera" property is set and true
         if (device_property_read_bool(dev, "libcamera")) {
                 device->libcamera_enabled = true;
-                dev_info(dev, "libcamera property is set and true\n");
+                dev_info(dev, "libcamera support enabled\n");
         } else {
-                dev_err(dev, "libcamera property is not set or false\n");
+                dev_info(dev, "libcamera support disabled\n");
         }
 
         /* Set and check the number of MIPI CSI2 data lanes */
@@ -613,7 +618,7 @@ static const struct v4l2_ctrl_ops vc_ctrl_ops = {
     .s_ctrl = vc_ctrl_s_ctrl,
 };
 
-static int vc_ctrl_init_ctrl(struct vc_device *device, struct v4l2_ctrl_handler *hdl, int id, struct vc_control *control)
+static int vc_ctrl_init_ctrl(struct vc_device *device, struct v4l2_ctrl_handler *hdl, int id, struct vc_control *control, int flags)
 {
         struct i2c_client *client = device->cam.ctrl.client_sen;
         struct device *dev = &client->dev;
@@ -624,10 +629,14 @@ static int vc_ctrl_init_ctrl(struct vc_device *device, struct v4l2_ctrl_handler 
         {
                 vc_err(dev, "%s(): Failed to init 0x%08x ctrl\n", __func__, id);
                 return -EIO;
-        }
+        }        
+        if (flags)
+                ctrl->flags |= flags;
 
         return 0;
 }
+
+ 
 static int vc_ctrl_init_ctrl_special(struct vc_device *device, struct v4l2_ctrl_handler *hdl, int id, int min, int max, int def)
 {
         struct i2c_client *client = device->cam.ctrl.client_sen;
@@ -901,7 +910,7 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
 
 
         hblank.min = 0 ;
-        hblank.max = 5000;
+        hblank.max = 0;
         hblank.def = hblank.min;
 
 
@@ -965,7 +974,7 @@ static int vc_sd_init(struct vc_device *device)
 
 
         // Add controls
-        ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_EXPOSURE, &device->cam.ctrl.exposure);
+        ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_EXPOSURE, &device->cam.ctrl.exposure, 0);
         ret |= vc_ctrl_init_ctrl_special(device, &device->ctrl_handler, V4L2_CID_ANALOGUE_GAIN, 
                 0, device->cam.ctrl.again.max_mdB + device->cam.ctrl.dgain.max_mdB, 0);
                 
@@ -980,10 +989,10 @@ static int vc_sd_init(struct vc_device *device)
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_binning_mode, &ctrl);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_roi_position, &ctrl);
 
-        ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_PIXEL_RATE, &pixel_rate);
+        ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_PIXEL_RATE, &pixel_rate, 0);
         ret |= vc_ctrl_init_ctrl_lfreq(device, &device->ctrl_handler, V4L2_CID_LINK_FREQ, &linkfreq);
-        ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_HBLANK,  &hblank);
-        ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_VBLANK,  &vblank);
+        ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_HBLANK,  &hblank, 0);
+        ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_VBLANK,  &vblank, 0);
         ret |= vc_ctrl_init_ctrl_lc(device, &device->ctrl_handler);
         if (ret)
         {
@@ -1009,98 +1018,87 @@ static const struct media_entity_operations vc_sd_media_ops = {
 
 static int vc_probe(struct i2c_client *client)
 {
-        struct device *dev = &client->dev;
-        struct vc_device *device;
-        struct vc_cam *cam;
-        int ret;
+    struct device *dev = &client->dev;
+    struct vc_device *device;
+    struct vc_cam *cam;
+    int ret;
 
-        vc_notice(dev, "%s(): Probing UNIVERSAL VC MIPI Driver (v%s)\n", __func__, VERSION);
+    vc_notice(dev, "%s(): Probing UNIVERSAL VC MIPI Driver (v%s)\n", __func__, VERSION);
 
-        device = devm_kzalloc(dev, sizeof(*device), GFP_KERNEL);
-        if (!device)
-                return -ENOMEM;
+    device = devm_kzalloc(dev, sizeof(*device), GFP_KERNEL);
+    if (!device)
+        return -ENOMEM;
 
-        cam = &device->cam;
-        cam->ctrl.client_sen = client;
+    cam = &device->cam;
+    cam->ctrl.client_sen = client;
 
-	mutex_init(&device->mutex);
+    mutex_init(&device->mutex);
 
-        vc_set_power(device, 1);
+    vc_set_power(device, 1);
 
-        ret = vc_core_init(cam, client);
-        if (ret)
-                goto error_power_off;
+    ret = vc_core_init(cam, client);
+    if (ret)
+        goto error_power_off;
 
+    ret = vc_check_hwcfg(cam, dev, device); 
 
+    if (ret)
+        goto error_power_off;
 
-        ret = vc_check_hwcfg(cam, dev, device); 
+    vc_mod_set_mode(cam, &ret); 
+    ret = vc_sd_init(device);
+    if (ret)
+        goto error_handler_free;
 
-        if (ret)
-                goto error_power_off;
+    device->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS;
+    device->pad.flags = MEDIA_PAD_FL_SOURCE;
+    device->sd.entity.ops = &vc_sd_media_ops;
+    device->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
+    ret = media_entity_pads_init(&device->sd.entity, 1, &device->pad);
+    if (ret)
+        goto error_handler_free;
 
-        vc_mod_set_mode(cam, &ret); 
-        ret = vc_sd_init(device);
-        if (ret)
-                goto error_handler_free;
+    ret = v4l2_async_register_subdev_sensor(&device->sd);
+    if (ret)
+        goto error_media_entity;
 
-        device->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE | V4L2_SUBDEV_FL_HAS_EVENTS;
-        device->pad.flags = MEDIA_PAD_FL_SOURCE;
-        device->sd.entity.ops = &vc_sd_media_ops;
-        device->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
-        ret = media_entity_pads_init(&device->sd.entity, 1, &device->pad);
-        if (ret)
-                goto error_handler_free;
+    /* Enable runtime PM and take one usage reference */
+    pm_runtime_enable(dev);
+    pm_runtime_get_sync(dev);
 
-        ret = v4l2_async_register_subdev_sensor(&device->sd);
-        if (ret)
-                goto error_media_entity;
-
-        pm_runtime_get_noresume(dev);
-        pm_runtime_set_active(dev);
-        pm_runtime_enable(dev);
-        pm_runtime_set_autosuspend_delay(dev, 2000);
-        pm_runtime_use_autosuspend(dev);
-        pm_runtime_mark_last_busy(dev);
-        pm_runtime_put_autosuspend(dev);
-
-        return 0;
+    return 0;
 
 error_media_entity:
-        media_entity_cleanup(&device->sd.entity);
-
+    media_entity_cleanup(&device->sd.entity);
 error_handler_free:
-        v4l2_ctrl_handler_free(&device->ctrl_handler);
-        mutex_destroy(&device->mutex);
-
+    v4l2_ctrl_handler_free(&device->ctrl_handler);
+    mutex_destroy(&device->mutex);
 error_power_off:
-        pm_runtime_disable(dev);
-        pm_runtime_set_suspended(dev);
-        pm_runtime_put_noidle(dev);
-        vc_set_power(device, 0);
-        return ret;
+    pm_runtime_disable(dev);
+    pm_runtime_set_suspended(dev);
+    vc_set_power(device, 0);
+    return ret;
 }
 
 static void vc_remove(struct i2c_client *client)
 {
-        struct v4l2_subdev *sd = i2c_get_clientdata(client);
-        struct vc_device *device = to_vc_device(sd);
-        struct vc_cam *cam = to_vc_cam(sd);
+    struct v4l2_subdev *sd = i2c_get_clientdata(client);
+    struct vc_device *device = to_vc_device(sd);
+    struct vc_cam *cam = to_vc_cam(sd);
 
-        v4l2_async_unregister_subdev(&device->sd);
-        media_entity_cleanup(&device->sd.entity);
-        v4l2_ctrl_handler_free(&device->ctrl_handler);
-        pm_runtime_disable(&client->dev);
-        mutex_destroy(&device->mutex);
+    v4l2_async_unregister_subdev(&device->sd);
+    media_entity_cleanup(&device->sd.entity);
+    v4l2_ctrl_handler_free(&device->ctrl_handler);
+    mutex_destroy(&device->mutex);
 
-        pm_runtime_get_sync(&client->dev);
-        pm_runtime_disable(&client->dev);
-        pm_runtime_set_suspended(&client->dev);
-        pm_runtime_put_noidle(&client->dev);
+    /* Drop the usage reference taken in probe and disable runtime PM */
+    pm_runtime_put_sync(&client->dev);
+    pm_runtime_disable(&client->dev);
 
-        if (cam->ctrl.client_mod)
-                i2c_unregister_device(cam->ctrl.client_mod);
+    if (cam->ctrl.client_mod)
+        i2c_unregister_device(cam->ctrl.client_mod);
 
-        vc_set_power(device, 0);
+    vc_set_power(device, 0);
 }
 
 static const struct dev_pm_ops vc_pm_ops = {
