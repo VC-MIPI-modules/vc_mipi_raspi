@@ -17,9 +17,11 @@ sed -i "s/^#define VERSION \".*\"/#define VERSION \"$VERSION_DEB_PACKAGE\"/" $VC
 sed -i "s/^#define VERSION \".*\"/#define VERSION \"$VERSION_DEB_PACKAGE\"/" $VC_MODULES_FILE
 
 
-cp -r debian_package build/debian
+rsync -a --exclude='.env' debian_package/ build/debian/
+
 mkdir -p build/debian
-cp -r src build/
+rsync -a --exclude='.env' src/ build/src/
+
 DEB_BUILD_OPTIONS="KERNEL_HEADERS=$KERNEL_HEADERS" 
 
 
