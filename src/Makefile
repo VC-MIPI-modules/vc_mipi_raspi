@@ -6,6 +6,12 @@
 # Author: Michael Steinel, MBE (Martin Engel)
 #
 ################################################################################
+# Source .env if present and export its keys
+ifneq ("$(wildcard .env)","")
+include .env
+export $(shell sed -n 's/=.*//' .env)
+endif
+
 DTC ?= dtc
 DTC_FLAGS ?= -@ -I dts -O dtb -Wno-unit_address_vs_reg
 EXTRA_CFLAGS += -Wno-missing-prototypes
@@ -41,7 +47,6 @@ obj-m := vc_mipi_core/
 obj-m += vc_mipi_camera/
 
 .PHONY: all copy-overlays
-
 
 
 dtbo: $(DEVICETREES)
@@ -87,6 +92,7 @@ clean:
 	-rm -f $(DEVICETREES)
 
 reload:
+	-@LOGGING_LEVEL=$$(cat /sys/module/vc_mipi_core/parameters/debug)
 	-sudo modprobe -r bcm2835-unicam
 	-sudo modprobe -r rp1_cfe 
 	-sudo modprobe -r vc_mipi_camera
@@ -98,6 +104,7 @@ reload:
 	-sudo modprobe vc_mipi_core
 	-sudo modprobe vc_mipi_modules
 	-sudo modprobe vc_mipi_camera
+	echo $$LOGGING_LEVEL | sudo tee /sys/module/vc_mipi_core/parameters/debug >/dev/null
 unload:
 	-sudo modprobe -r vc_mipi_camera
 	-sudo modprobe -r vc_mipi_modules
@@ -112,8 +119,8 @@ install: all
 	sudo /sbin/depmod -a $(shell uname -r)
 	sudo cp overlays/*.txt /boot/firmware/
 	sudo mkdir -p /usr/local/bin
-	sudo cp set_rpi5_pipeline.sh /usr/local/bin
-	sudo chmod +x /usr/local/bin/set_rpi5_pipeline.sh
+	sudo cp set_rpi5_pipeline /usr/local/bin
+	sudo chmod +x /usr/local/bin/set_rpi5_pipeline
 	sudo cp 99-camera-setup.rules /etc/udev/rules.d/
 	sudo cp vc-config /usr/local/bin/
 	sudo chmod +x /usr/local/bin/vc-config

@@ -154,5 +154,18 @@ configure_video_device() {
         fi
     done
 }
+# Check if arguments are provided
+if [ "$#" -lt 2 ]; then
+   
+    for mediadev in /dev/media*; do
+        if media-ctl -d "$mediadev" -p | grep -q "vc_mipi_camera"; then
+            subdev=$(media-ctl -d "$mediadev" -p | grep "vc_mipi_camera" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
+            dev=$(media-ctl -d "$mediadev" -p | grep "rp1-cfe-csi2_ch0" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
+
+            configure_video_device "$subdev" "$dev" 
+        fi
+    done
+    exit 0
+fi
 
 configure_video_device "$1" "$2" 

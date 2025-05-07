@@ -113,7 +113,7 @@ configure_device_tree() {
 
         current_lanes=$(grep "^dtparam="$camera"_lanes" "$config_file" | awk -F 'lanes' '{print $2}')
         current_manu=$(grep "^dtparam="$camera"_manu_" "$config_file" | awk -F '_manu_' '{print $2}')
-        current_libcamera=$(grep "^dtparam="$camera"_libcamera_" "$config_file" | awk -F '_libcamera' '{print $2}')
+        current_libcamera=$(grep "^dtparam="$camera"_libcamera_" "$config_file" | awk -F '_libcamera_' '{print $2}')
 
         # Use whiptail to create a menu for selecting the number of lanes
         lanes=$(whiptail --menu "Select the number of lanes:" 15 200 3 --default-item "$current_lanes" --cancel-button "Cancel"\
@@ -538,7 +538,7 @@ configure_subdev_controls() {
         done
 
         # Show the menu with controls
-        selected_control=$(whiptail --menu "Select the control to adjust:" 25 80 16 "${menu_options[@]}" 3>&1 1>&2 2>&3)
+        selected_control=$(whiptail --menu "Select the control to adjust:" 20 80 10 "${menu_options[@]}" 3>&1 1>&2 2>&3)
         # Check if cancel was pressed
         if [ $? -ne 0 ]; then
             exit 0

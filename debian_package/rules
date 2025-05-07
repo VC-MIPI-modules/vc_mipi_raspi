@@ -24,9 +24,9 @@ override_dh_auto_install:
 
 	cp -v dkms.conf $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/
 	cp -rv src/. $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/
-	cp src/set_rpi5_pipeline.sh $(CURDIR)/debian/tmp/usr/local/bin/
-	chmod 755 $(CURDIR)/debian/tmp/usr/local/bin/set_rpi5_pipeline.sh
-	rm -f $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/set_rpi5_pipeline.sh
+	cp src/set_rpi5_pipeline $(CURDIR)/debian/tmp/usr/local/bin/
+	chmod 755 $(CURDIR)/debian/tmp/usr/local/bin/set_rpi5_pipeline
+	rm -f $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/set_rpi5_pipeline
 	rm -f $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/99-camera-setup.rules
 	cp src/99-camera-setup.rules $(CURDIR)/debian/tmp/etc/udev/rules.d/
 	chmod 755 $(CURDIR)/debian/tmp/etc/udev/rules.d/99-camera-setup.rules
