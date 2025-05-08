@@ -1,0 +1,18 @@
+# debian/postrm - simplified version
+#!/bin/sh
+set -e
+
+PACKAGE_NAME="vc-mipi-driver-bcm2712"
+PACKAGE_VERSION="${VERSION_DEB_PACKAGE}"
+
+case "$1" in
+    remove|upgrade|deconfigure)
+        # Only remove DKMS module
+        if [ -d "/var/lib/dkms/${PACKAGE_NAME}/${PACKAGE_VERSION}" ]; then
+            echo "Removing old driver version ${PACKAGE_NAME}-${PACKAGE_VERSION} from DKMS"
+            dkms remove -m "${PACKAGE_NAME}" -v "${PACKAGE_VERSION}" --all || true
+        fi
+    ;;
+esac
+
+exit 0

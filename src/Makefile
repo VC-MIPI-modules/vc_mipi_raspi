@@ -12,13 +12,11 @@ include .env
 export $(shell sed -n 's/=.*//' .env)
 endif
 
-DTC ?= dtc
-DTC_FLAGS ?= -@ -I dts -O dtb -Wno-unit_address_vs_reg
 EXTRA_CFLAGS += -Wno-missing-prototypes
 
 
-SENSOR_NAMES := vc-mipi-bcm2712-cam0
-SENSOR_NAMES += vc-mipi-bcm2712-cam1
+SENSOR_NAMES := vc-mipi-bcm2711-cam0
+SENSOR_NAMES += vc-mipi-bcm2711-cam1
 SENSOR_NAMES += vc-mipi-common-memory-contiguous
 
 
@@ -42,26 +40,21 @@ SENSOR_DRIVER += vc_mipi_modules
 SENSOR_DRIVER += vc_mipi_camera
 DEVICETREES	:= $(foreach sentype,$(SENSOR_NAMES),overlays/$(sentype).dtbo)
 DEVICETREES_RM := $(foreach sentype,$(SENSOR_NAMES),$(sentype).dtbo)
-
+OVERLAY_DIRS := $(wildcard ../overlays/overlays-*)
 obj-m := vc_mipi_core/
 obj-m += vc_mipi_camera/
 
 .PHONY: all copy-overlays
 
 
-dtbo: $(DEVICETREES)
-	@echo "\n### DTBOs will be installed in $(BOOT_OVERLAYS_DIR) ###\n"
+dtbo: 
+	@for d in $(OVERLAY_DIRS); do \
+		echo ">>> building DTBOs in $$d"; \
+		$(MAKE) -C $$d all; \
+	done
 
-
-%.dtbo: %-overlay.dts
-	$(DTC) $(DTC_FLAGS) -o $@ $<
-
-# Add rule to build .dtbo from .dts
-overlays/%.dtbo: overlays/%.dts
-	$(DTC) $(DTC_FLAGS) -o $@ $<
-
-overlays/vc-mipi-bcm2712-cam0.dtbo: overlays/vc-mipi-bcm2712-cam0-overlay.dts
-	dtc -W no-unit_address_vs_reg -@ -I dts -O dtb  -o $@  $<
+dtbo_current: 
+	$(MAKE) -C overlays all
 
 KERNEL_HEADERS ?= /lib/modules/$(shell uname -r)/build
 # Debug information
@@ -126,7 +119,6 @@ install: all
 	sudo chmod +x /usr/local/bin/vc-config
 	grep -qxF "include config_vc-mipi-driver-bcm2712.txt" /boot/firmware/config.txt || echo "include config_vc-mipi-driver-bcm2712.txt" | sudo tee -a /boot/firmware/config.txt
 uninstall:
-	sudo rm -f $(foreach sentype,$(SENSOR_NAMES),$(KERNEL_I2C_DIR)/$(sentype).ko)
 	sudo rm -f $(foreach sencommon,$(SENSOR_DRIVER),$(KERNEL_I2C_DIR)/$(sencommon).ko)
 	sudo rm -f $(foreach dtbo,$(DEVICETREES_RM),$(BOOT_OVERLAYS_DIR)/$(dtbo))
 	sudo /sbin/depmod -a $(shell uname -r)

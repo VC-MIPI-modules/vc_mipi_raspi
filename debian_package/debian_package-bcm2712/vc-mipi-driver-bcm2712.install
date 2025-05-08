@@ -1,11 +1,13 @@
 usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/dkms.conf usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/
 usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/Makefile usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/
 usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/overlays/*.txt usr/share/vc-mipi-driver-bcm2712-dkms/overlays/
+usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/overlays/Makefile usr/share/vc-mipi-driver-bcm2712-dkms/overlays/
 
 usr/share/vc-mipi-driver-bcm2712-dkms/debian/postinst usr/share/vc-mipi-driver-bcm2712-dkms/debian/
 usr/share/vc-mipi-driver-bcm2712-dkms/debian/postrm usr/share/vc-mipi-driver-bcm2712-dkms/debian/
 
 usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/overlays/*.dtbo  usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/overlays/
+usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/overlays/Makefile  usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/overlays/
 
 usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/vc_mipi_camera/*.c usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/vc_mipi_camera/
 usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/vc_mipi_camera/Makefile usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}/vc_mipi_camera/
