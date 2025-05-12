@@ -11,7 +11,7 @@
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-event.h>
 
-#define VERSION "0.6.0"
+#define VERSION "0.6.1"
 
 int debug = 3;
 // --- Prototypes --------------------------------------------------------------
