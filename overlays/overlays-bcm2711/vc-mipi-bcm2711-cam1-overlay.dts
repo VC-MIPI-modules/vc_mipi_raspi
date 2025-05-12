@@ -39,8 +39,6 @@
 				compatible = "vc,vc_mipi_camera";
 				reg = <0x1a>;
 				status = "okay";
-
-				
 				port {
 					vc_mipi_cam1_ep: endpoint {
 						remote-endpoint = <&csi2_ep>;
@@ -146,11 +144,12 @@
 	};
 
 	__overrides__ {
-        cam1_lanes1 	=      <0>,"+1+2+3=1001=2001";
-		cam1_lanes2 	=      <0>,"+1+2+3=1002=2002";
-		cam1_lanes4 	=      <0>,"+1+2+3=1004=2004";		
-		cam1_lanes0 	= 	   <0>,"";
-		cam1_manu_ov	=      <&vc_mipi_cam1>,"reg:0=",<0x60>;
+        cam1_lanes1 	   	=      <0>,"+1+2+3=1001=2001";
+		cam1_lanes2 	   	=      <0>,"+1+2+3=1002=2002";
+		cam1_lanes4 	   	=      <0>,"+1+2+3=1004=2004";		
+		cam1_lanes0 	   	= 	   <0>,"";
+		cam1_manu_ov	   	=      <&vc_mipi_cam1>,"reg:0=",<0x60>;
+		cam1_libcamera_on	=      <&vc_mipi_cam1>,"libcamera";
 
 
     };

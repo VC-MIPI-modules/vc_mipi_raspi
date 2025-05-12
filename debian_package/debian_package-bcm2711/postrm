@@ -2,7 +2,7 @@
 #!/bin/sh
 set -e
 
-PACKAGE_NAME="vc-mipi-driver-bcm2712"
+PACKAGE_NAME="vc-mipi-driver-${MODULE_VERSION}"
 PACKAGE_VERSION="${VERSION_DEB_PACKAGE}"
 
 case "$1" in

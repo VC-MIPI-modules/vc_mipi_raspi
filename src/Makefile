@@ -77,7 +77,7 @@ endif
 build:
 	EXTRA_CFLAGS=$(EXTRA_CFLAGS) $(MAKE) -C $(KERNEL_HEADERS) M=$(PWD) modules
 
-all: $(DEVICETREES) build
+all: build
 
 clean:
 	$(MAKE) -C $(KERNEL_HEADERS) M=$(PWD) clean
@@ -108,9 +108,9 @@ dev:	clean all install reload
 
 install: all
 	sudo install -p -m 644  $(SENSORDRIVERS)	/lib/modules/$(shell uname -r)/kernel/drivers/media/i2c/
-	sudo install -p -m 644  $(DEVICETREES)	 $(BOOT_OVERLAYS_DIR)/
+	# sudo install -p -m 644  $(DEVICETREES)	 $(BOOT_OVERLAYS_DIR)/
 	sudo /sbin/depmod -a $(shell uname -r)
-	sudo cp overlays/*.txt /boot/firmware/
+	# sudo cp overlays/*.txt /boot/firmware/
 	sudo mkdir -p /usr/local/bin
 	sudo cp set_rpi5_pipeline /usr/local/bin
 	sudo chmod +x /usr/local/bin/set_rpi5_pipeline

@@ -2,10 +2,10 @@
 
 KERNEL_HEADERS ?= $(shell echo $(DEB_BUILD_OPTIONS) | grep -oP 'KERNEL_HEADERS=\K[^ ]+')
 
-PACKAGE_DIR := $(CURDIR)/debian/tmp/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}
 DEST_SRC_DIR := $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}
 DEST_BOOT_DIR := $(CURDIR)/debian/tmp/boot/
 DEST_DKMS_DIR := $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-bcm2712-dkms/
+DEST_DKMS_VAR_DIR := $(CURDIR)/debian/tmp/var/lib/dkms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source
 
 %:
 	dh $@
@@ -14,7 +14,7 @@ override_dh_auto_clean:
 	cd src && $(MAKE) clean
 
 override_dh_auto_build:
-	cd src && $(MAKE) dtbo
+	cd src && $(MAKE) dtbo_current
 
 override_dh_auto_install:
 
@@ -22,17 +22,18 @@ override_dh_auto_install:
 	dpkg-divert --local --rename --add /boot/firmware/config_vc-mipi-driver-bcm2712.txt
 	# Install to tmp directory with verbose output
 	
-	mkdir -p $(PACKAGE_DIR)
 	mkdir -p $(DEST_SRC_DIR)
 	mkdir -p $(DEST_DKMS_DIR)/overlays/
 	mkdir -p $(CURDIR)/debian/tmp/usr/local/bin/
 	mkdir -p $(DEST_BOOT_DIR)/firmware/overlays/
 	mkdir -p $(DEST_DKMS_DIR)/debian/ 
-
+	mkdir -p $(DEST_DKMS_VAR_DIR)
 	mkdir -p $(CURDIR)/debian/tmp/etc/udev/rules.d
 
 
 	cp dkms.conf $(DEST_SRC_DIR)
+	cp dkms.conf $(DEST_DKMS_VAR_DIR)
+
 	cp -rv src/* $(DEST_SRC_DIR)
 
 	# Device Tree Files

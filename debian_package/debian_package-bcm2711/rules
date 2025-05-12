@@ -2,10 +2,10 @@
 
 KERNEL_HEADERS ?= $(shell echo $(DEB_BUILD_OPTIONS) | grep -oP 'KERNEL_HEADERS=\K[^ ]+')
 
-PACKAGE_DIR := $(CURDIR)/debian/tmp/vc-mipi-driver-bcm2711-${VERSION_DEB_PACKAGE}
-DEST_SRC_DIR := $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2711-${VERSION_DEB_PACKAGE}
+DEST_SRC_DIR := $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}
 DEST_BOOT_DIR := $(CURDIR)/debian/tmp/boot/
-DEST_DKMS_DIR := $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-bcm2711-dkms/
+DEST_DKMS_DIR := $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/
+DEST_DKMS_VAR_DIR := $(CURDIR)/debian/tmp/var/lib/dkms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source
 
 %:
 	dh $@
@@ -14,30 +14,32 @@ override_dh_auto_clean:
 	cd src && $(MAKE) clean
 
 override_dh_auto_build:
-	cd src && $(MAKE) dtbo
+	cd src && $(MAKE) dtbo_current
 
 override_dh_auto_install:
 
 	# Divert the files to prevent dpkg from making backup links
-	dpkg-divert --local --rename --add /boot/firmware/config_vc-mipi-driver-bcm2711.txt
+	dpkg-divert --local --rename --add /boot/firmware/config_vc-mipi-driver-${MODULE_VERSION}.txt
 	# Install to tmp directory with verbose output
 
-	mkdir -p $(PACKAGE_DIR)
 	mkdir -p $(DEST_SRC_DIR)
 	mkdir -p $(DEST_DKMS_DIR)/overlays/
 	mkdir -p $(CURDIR)/debian/tmp/usr/local/bin/
 	mkdir -p $(DEST_BOOT_DIR)/firmware/overlays/
 	mkdir -p $(DEST_DKMS_DIR)/debian/ 
+	mkdir -p $(DEST_DKMS_VAR_DIR)
 
 
 	cp dkms.conf $(DEST_SRC_DIR)
+	cp dkms.conf $(DEST_DKMS_VAR_DIR)
+
 	cp -rv src/* $(DEST_SRC_DIR)
 
 	# Device Tree Files
 	cd $(DEST_SRC_DIR)/overlays && $(MAKE) all
 
-	cp src/overlays/config_vc-mipi-driver-bcm2711.txt $(DEST_BOOT_DIR)/firmware/
-	chmod 644 $(DEST_BOOT_DIR)/firmware/config_vc-mipi-driver-bcm2711.txt
+	cp src/overlays/config_vc-mipi-driver-${MODULE_VERSION}.txt $(DEST_BOOT_DIR)/firmware/
+	chmod 644 $(DEST_BOOT_DIR)/firmware/config_vc-mipi-driver-${MODULE_VERSION}.txt
 	cp src/vc-config $(CURDIR)/debian/tmp/usr/local/bin/
 	chmod 755 $(CURDIR)/debian/tmp/usr/local/bin/vc-config
 
@@ -52,7 +54,7 @@ override_dh_auto_install:
 	dh_install --sourcedir=$(CURDIR)/debian/tmp --verbose 
 
 	# Undivert the files after installation
-	dpkg-divert --local --rename --remove /boot/firmware/config_vc-mipi-driver-bcm2711.txt
+	dpkg-divert --local --rename --remove /boot/firmware/config_vc-mipi-driver-${MODULE_VERSION}.txt
 
 override_dh_missing:
 	dh_missing --fail-missing
