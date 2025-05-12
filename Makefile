@@ -1,5 +1,5 @@
-.PHONY: all installDeps installLibPisp installLibcamera installLibcameraApps
-all: installDeps installLibPisp installLibcamera installLibcameraApps
+.PHONY: all installDeps installLibPisp installLibcamera installRPICamApps
+all: installDeps installLibPisp installLibcamera installGstreamer installRPICamApps
 
 installDeps:
 	@echo "Installing dependencies..."
@@ -12,8 +12,8 @@ installDeps:
 	sudo apt install -y libtiff-dev qt6-base-dev qt6-tools-dev-tools
 	sudo apt install -y meson cmake
 	sudo apt install -y python3-yaml python3-ply
-	sudo apt install -y libglib2.0-dev libgstreamer-plugins-base1.0-dev
-	sudo apt install -y cmake libboost-program-options-dev libdrm-dev libexif-dev
+	sudo apt install -y libglib2.0-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+	sudo apt install -y cmake libboost-program-options-dev libdrm-dev libexif-dev libpng-dev
 
 installLibPisp:
 	cd /tmp && rm -rf /tmp/libpisp && \
@@ -40,14 +40,20 @@ installLibcamera:
 	  -Dpycamera=enabled && \
 	meson compile -C build && \
 	sudo ninja -C build install
-
-installLibcameraApps:
+installGstreamer:
+	sudo apt install -y gstreamer1.0-tools gstreamer1.0-plugins-base \
+	gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+	gstreamer1.0-libav
+installRPICamApps:
 	cd /tmp && rm -rf /tmp/rpicam-apps && \
 	git clone https://github.com/raspberrypi/rpicam-apps.git && \
 	cd rpicam-apps && \
+	git checkout v1.6.0 && \
 	meson setup build && \
 	meson compile -C build && \
 	sudo meson install -C build
-	echo "/usr/local/lib/aarch64-linux-gnu" > /etc/ld.so.conf.d/rpicam.conf
-	sudo ldconfig
+	@printf "%s\n" \
+	 "/usr/local/lib/aarch64-linux-gnu" \
+	 "/usr/lib/aarch64-linux-gnu" \
+	| sudo tee /etc/ld.so.conf.d/rpicam.conf	sudo ldconfig
 
