@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Find all media devices and check for video0
+frontend_device="rp1-cfe-csi2_ch0"
 
 
 map_mediabus_to_fourcc() {
@@ -160,7 +161,7 @@ if [ "$#" -lt 2 ]; then
     for mediadev in /dev/media*; do
         if media-ctl -d "$mediadev" -p | grep -q "vc_mipi_camera"; then
             subdev=$(media-ctl -d "$mediadev" -p | grep "vc_mipi_camera" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
-            dev=$(media-ctl -d "$mediadev" -p | grep "rp1-cfe-csi2_ch0" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
+            dev=$(media-ctl -d "$mediadev" -p | grep "$frontend_device" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
 
             configure_video_device "$subdev" "$dev" 
         fi

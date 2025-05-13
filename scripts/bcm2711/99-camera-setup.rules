@@ -1,0 +1,3 @@
+# debian/99-camera-setup.rules
+ACTION=="add", SUBSYSTEM=="video4linux", KERNEL=="video0", RUN+="/usr/local/bin/set_rpi4_pipeline /dev/v4l-subdev0 /dev/video0"
+ACTION=="add", SUBSYSTEM=="video4linux", KERNEL=="video1", RUN+="/usr/local/bin/set_rpi4_pipeline /dev/v4l-subdev1 /dev/video1"

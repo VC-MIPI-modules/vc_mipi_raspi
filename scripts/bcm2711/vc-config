@@ -106,16 +106,17 @@ model_info=$(grep -m 1 'Model' /proc/cpuinfo | awk -F ': ' '{print $2}')
 # Convert the revision code to binary and extract the PPPP part (bits 23 to 20)
 revision_bin=$(printf "%032b\n" $((16#$revision_info)))
 pppp=$(( ($revision_bin >> 12) & 0xf ))
-
+echo "Revision binary: $revision_bin"
 # Convert the binary PPPP part back to hexadecimal
 pppp_hex=$(echo "obase=16; ibase=2; $pppp" | bc)
-
+ttt_hex=$(printf "%X\n" $(( ($revision_bin >> 4) & 0xFF )))
 
 # Display the hardware information
 echo "Hardware: $hardware_info"
 echo "Revision: $revision_info"
 echo "Model: $model_info"
 echo "PPPP: $pppp_hex"
+echo "TTTTTTTT: $ttt_hex"
 
 # Determine the Raspberry Pi model based on the revision code
 case $pppp_hex in
@@ -141,12 +142,20 @@ configure_device_tree() {
         current_lanes=$(grep "^dtparam="$camera"_lanes" "$config_file" | awk -F 'lanes' '{print $2}')
         current_manu=$(grep "^dtparam="$camera"_manu_" "$config_file" | awk -F '_manu_' '{print $2}')
         current_libcamera=$(grep "^dtparam="$camera"_libcamera_" "$config_file" | awk -F '_libcamera_' '{print $2}')
-
+        if( [ "$ttt_hex" = 11 ]); then
+            lanes=$(whiptail --menu "Select the number of lanes:" 15 200 3 --default-item "$current_lanes" --cancel-button "Cancel"\
+                "1" "1 lane (i.e. OV7251, IMX296, IMX297)" \
+                "2" "2 lanes (i.e.  OV9281, IMX264, IMX265, IMX178, IMX183, IMX226, IMX250, IMX252, IMX273, IMX290, IMX327, IMX335, IMX392)" 3>&1 1>&2 2>&3)
+        else
+            #CM4 i.e.
+            lanes=$(whiptail --menu "Select the number of lanes:" 15 200 3 --default-item "$current_lanes" --cancel-button "Cancel"\
+            "1" "1 lane (i.e. OV7251, IMX296, IMX297)" \
+            "2" "2 lanes (i.e.  OV9281, IMX264, IMX265, IMX178, IMX183, IMX226, IMX250, IMX252, IMX273, IMX290, IMX327, IMX335, IMX392)" \
+            "4" "4 lanes (i.e. IMX178, IMX183, IMX226, IMX250, IMX252, IMX273, IMX290,  IMX327, IMX335, IMX392, IMX412, IMX415, IMX462, IMX565, IMX566, IMX567, IMX568, IMX900)" 3>&1 1>&2 2>&3)
+        
+        fi
         # Use whiptail to create a menu for selecting the number of lanes
-        lanes=$(whiptail --menu "Select the number of lanes:" 15 200 3 --default-item "$current_lanes" --cancel-button "Cancel"\
-        "1" "1 lane (i.e. OV7251, IMX296, IMX297)" \
-        "2" "2 lanes (i.e.  OV9281, IMX264, IMX265, IMX178, IMX183, IMX226, IMX250, IMX252, IMX273, IMX290, IMX327, IMX335, IMX392)" \
-        "4" "4 lanes (i.e. IMX178, IMX183, IMX226, IMX250, IMX252, IMX273, IMX290,  IMX327, IMX335, IMX392, IMX412, IMX415, IMX462, IMX565, IMX566, IMX567, IMX568, IMX900)" 3>&1 1>&2 2>&3)
+       
         if [ $? -ne 0 ]; then
             break
         fi 
@@ -222,11 +231,8 @@ set_roi() {
         
         # Check if this media device has video0
         if media-ctl -d "$mediadev" -p | grep -q "$videodev"; then
-            echo "Found $videodev on $mediadev"
-            
-            # Your existing script logic here
+            echo "Found $videodev on $mediadev"           
         
-            media-ctl -d "$mediadev" 
 
             mediabus_code=$(get_mediabus_code $subdev )
 
@@ -243,11 +249,11 @@ set_roi() {
             entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
             echo media-ctl -d "$mediadev" -p | grep -B 3 "$subdev"
             echo "Code: $fmt"
-            media-ctl -d "$mediadev" -l ''\''vc_mipi_camera 0-001a'\'':0 -> '\''unicam-image'\'':0 [1]' 
+            media-ctl -d "$mediadev" -l ''\'"$entity_name"\'':0 -> '\''unicam-image'\'':0 [1]' 
             
             echo "media-ctl -d $mediadev -V \"'$entity_name':0 [fmt:$mediabusfmt/${width}x${height} field:none colorspace:srgb]\"" 
             media-ctl -d $mediadev -V "'$entity_name':0 [fmt:$mediabusfmt/${width}x${height} field:none colorspace:srgb]" 
-    v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb
+            v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb
    
     if v4l2-ctl --verbose  --stream-mmap --device=$videodev --stream-count=3;then
         whiptail --infobox "Successfully set ROI to $width x $height" 8 40 --title "Success"

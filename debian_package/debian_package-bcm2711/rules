@@ -28,6 +28,7 @@ override_dh_auto_install:
 	mkdir -p $(DEST_BOOT_DIR)/firmware/overlays/
 	mkdir -p $(DEST_DKMS_DIR)/debian/ 
 	mkdir -p $(DEST_DKMS_VAR_DIR)
+	mkdir -p $(CURDIR)/debian/tmp/etc/udev/rules.d
 
 
 	cp dkms.conf $(DEST_SRC_DIR)
@@ -41,8 +42,12 @@ override_dh_auto_install:
 	
 	cp src/overlays/config_vc-mipi-driver-${MODULE_VERSION}.txt $(DEST_BOOT_DIR)/firmware/
 	chmod 644 $(DEST_BOOT_DIR)/firmware/config_vc-mipi-driver-${MODULE_VERSION}.txt
+	cp src/set_rpi4_pipeline $(CURDIR)/debian/tmp/usr/local/bin/
+	chmod 755 $(CURDIR)/debian/tmp/usr/local/bin/set_rpi4_pipeline
 	cp src/vc-config $(CURDIR)/debian/tmp/usr/local/bin/
 	chmod 755 $(CURDIR)/debian/tmp/usr/local/bin/vc-config
+	cp src/99-camera-setup.rules $(CURDIR)/debian/tmp/etc/udev/rules.d/
+	chmod 755 $(CURDIR)/debian/tmp/etc/udev/rules.d/99-camera-setup.rules
 
 	cp debian/postinst $(DEST_DKMS_DIR)/debian/ 
 	cp debian/postrm $(DEST_DKMS_DIR)/debian/ 

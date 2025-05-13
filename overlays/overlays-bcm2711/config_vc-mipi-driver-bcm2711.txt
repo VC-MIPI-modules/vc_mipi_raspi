@@ -32,7 +32,7 @@
 
 
 dtoverlay=vc-mipi-bcm2711-cam0
-dtparam=cam0_lanes4
+dtparam=cam0_lanes2
 dtparam=cam0_manu_sony
 dtparam=cam0_libcamera_off
 
@@ -58,7 +58,7 @@ dtparam=cam0_libcamera_off
 ### Sony(IMX...       )           => cam1_manu_sony
 
 dtoverlay=vc-mipi-bcm2711-cam1
-dtparam=cam1_lanes4
+dtparam=cam1_lanes2
 dtparam=cam1_manu_sony
 dtparam=cam1_libcamera_off
 
