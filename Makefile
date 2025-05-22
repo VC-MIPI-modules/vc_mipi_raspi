@@ -27,7 +27,7 @@ installLibcamera:
 	cd /tmp && rm -rf /tmp/libcamera && \
 	git clone https://github.com/VC-MIPI-modules/libcamera || true && \
 	cd libcamera && \
-	meson setup build --buildtype=release \
+	meson setup build --buildtype=release --prefix=/usr \
 	  -Dpipelines=rpi/vc4,rpi/pisp \
 	  -Dipas=rpi/vc4,rpi/pisp \
 	  -Dv4l2=true \

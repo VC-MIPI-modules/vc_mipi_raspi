@@ -67,13 +67,18 @@ it is possible to change the values of the controls and also the region of inter
 ![Lanes configuration](./docs/images/whiptail_lanes_config.png "Lanes configuration")
 ![Format Selection](./docs/images/whiptail_format_settings.png "Format settings")
 
+# ISP and Libcamera Support
+For Libcamera support, refer to [Libcamera Installation](./docs/libcamera.md)
+Then the ISP with features like Auto White Balancing (AWB) are supported.
 
 # Support Tool
 ## Installation
 The official support tool for the v4l2 driver is 
-[V4L2-Test](https://github.com/pmliquify/v4l2-test/tree/master)
+[V4L2-Test](https://github.com/pmliquify/v4l2-test/tree/feature/gstreamer)
 
+⚠️ **Important:** Checkout branch feature/gstreamer for full raspberrypi compliance
 Please refer to the installation there. 
+
 ## Usage
 For starting, you have to add the subdevice properly in order to set the controls by tool:
 ```shell
