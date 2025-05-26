@@ -2,11 +2,11 @@ Source: vc-mipi-driver-bcm2712
 Section: kernel
 Priority: optional
 Maintainer: Vision Components <info@vision-components.com>
-Build-Depends: debhelper-compat (= 13), dkms, dh-dkms, debhelper (>= 13), linux-headers-generic
+Build-Depends: debhelper-compat (= 13), dkms, dh-dkms, debhelper (>= 13)
 
 Package: vc-mipi-driver-bcm2712
 Architecture: arm64
-Depends: ${misc:Depends}, dkms, linux-headers-generic, v4l-utils, whiptail
+Depends: ${misc:Depends}, dkms, v4l-utils, whiptail
 Description: DKMS source for the ${DRIVER_NAME} driver
  This package provides the source code for the Vision Components
  MIPI CSI-2 camera driver kernel module for BCM2712.

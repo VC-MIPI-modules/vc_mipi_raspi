@@ -11,7 +11,7 @@
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-event.h>
 
-#define VERSION "0.6.1"
+#define VERSION "0.6.2"
 
 int debug = 3;
 // --- Prototypes --------------------------------------------------------------
@@ -48,6 +48,7 @@ enum private_cids
         V4L2_CID_VC_SINGLE_TRIGGER,
         V4L2_CID_VC_BINNING_MODE,
         V4L2_CID_VC_ROI_POSITION,
+        V4L2_CID_VC_NAME,
 };
 
 enum pad_types {
@@ -522,7 +523,16 @@ int vc_ctrl_s_ctrl(struct v4l2_ctrl *ctrl)
         return 0;
 }
 
-// MS
+static int vc_ctrl_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
+{
+        struct vc_device *device = container_of(ctrl->handler, struct vc_device, ctrl_handler);
+        if (ctrl->id == V4L2_CID_VC_NAME) {
+                strscpy(ctrl->p_new.p_char, device->cam.desc.sen_type, ctrl->maximum);
+                return 0;
+        }
+    return -EINVAL;
+}
+
 static int vc_get_bit_depth(__u8 mipi_format)
 {
 
@@ -616,6 +626,7 @@ static const struct v4l2_subdev_ops vc_subdev_ops = {
 
 static const struct v4l2_ctrl_ops vc_ctrl_ops = {
     .s_ctrl = vc_ctrl_s_ctrl,
+    .g_volatile_ctrl = vc_ctrl_g_volatile_ctrl,
 };
 
 static int vc_ctrl_init_ctrl(struct vc_device *device, struct v4l2_ctrl_handler *hdl, int id, struct vc_control *control, int flags)
@@ -734,8 +745,7 @@ static int vc_ctrl_init_custom_ctrl(struct vc_device *device, struct v4l2_ctrl_h
         {
                 vc_err(dev, "%s(): Failed to init 0x%08x ctrl\n", __func__, config->id);
                 return -EIO;
-        }
-
+        }       
         return 0;
 }
 static const struct v4l2_ctrl_config ctrl_rotation = {
@@ -854,6 +864,18 @@ static const struct v4l2_ctrl_config ctrl_blacklevel = {
     .flags = V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
     .min = 0,
     .max = 100000,
+    .step = 1,
+    .def = 0,
+};
+
+static const struct v4l2_ctrl_config ctrl_name = {
+    .ops = &vc_ctrl_ops,
+    .id = V4L2_CID_VC_NAME, // See https://github.com/VC-MIPI-modules/vc_mipi_nvidia/blob/master/doc/BLACK_LEVEL.md
+    .name = "Sensor name",
+    .type = V4L2_CTRL_TYPE_STRING,
+    .flags = V4L2_CTRL_FLAG_READ_ONLY | V4L2_CTRL_FLAG_VOLATILE,
+    .min = 0,
+    .max = 10,
     .step = 1,
     .def = 0,
 };
@@ -988,6 +1010,7 @@ static int vc_sd_init(struct vc_device *device)
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_single_trigger, &ctrl);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_binning_mode, &ctrl);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_roi_position, &ctrl);
+        ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_name, &ctrl);
 
         ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_PIXEL_RATE, &pixel_rate, 0);
         ret |= vc_ctrl_init_ctrl_lfreq(device, &device->ctrl_handler, V4L2_CID_LINK_FREQ, &linkfreq);

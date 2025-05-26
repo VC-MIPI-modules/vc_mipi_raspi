@@ -599,9 +599,12 @@ for mediadev in /dev/media*; do
     if media-ctl -d "$mediadev" -p | grep -q "vc_mipi_camera"; then
         subdev=$(media-ctl -d "$mediadev" -p | grep "vc_mipi_camera" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
         dev=$(media-ctl -d "$mediadev" -p | grep "$frontend_device" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
+        bus=$(media-ctl -d "$mediadev" -p | grep "vc_mipi_camera" | sed -n 's/.*vc_mipi_camera \([0-9][0-9]*\)-[0-9a-fA-F]\+.*/\1/p')
+        sensor=$(v4l2-ctl --device=$subdev --get-ctrl="sensor_name" | awk -F' ' '{print $NF}' | tr -d "'")
+
         dev_subdev_map["$dev"]="$subdev"
 
-        menu_options+=( "$dev" "$subdev" )
+        menu_options+=( "$dev" "$subdev $sensor" )
 
     fi
 done
@@ -616,7 +619,7 @@ echo "No camera detected"
     exit 1
 fi
 # Use whiptail to create a menu with the collected subdevice names
-selected_dev=$(whiptail --menu "Select the sensor" 10 60 3 "${menu_options[@]}" 3>&1 1>&2 2>&3)
+selected_dev=$(whiptail --menu "Select the sensor" 10 80 3 "${menu_options[@]}" 3>&1 1>&2 2>&3)
 if [ $? -ne 0 ]; then
     exit 1
 fi

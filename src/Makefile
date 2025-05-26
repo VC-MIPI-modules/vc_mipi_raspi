@@ -106,11 +106,7 @@ unload:
 
 dev:	clean all install reload
 
-install: all
-	sudo install -p -m 644  $(SENSORDRIVERS)	/lib/modules/$(shell uname -r)/kernel/drivers/media/i2c/
-	# sudo install -p -m 644  $(DEVICETREES)	 $(BOOT_OVERLAYS_DIR)/
-	sudo /sbin/depmod -a $(shell uname -r)
-	# sudo cp overlays/*.txt /boot/firmware/
+installScripts:
 	sudo mkdir -p /usr/local/bin
 	sudo cp set_rpi5_pipeline /usr/local/bin
 	sudo chmod +x /usr/local/bin/set_rpi5_pipeline
@@ -118,6 +114,12 @@ install: all
 	sudo cp vc-config /usr/local/bin/
 	sudo chmod +x /usr/local/bin/vc-config
 	grep -qxF "include config_vc-mipi-driver-bcm2712.txt" /boot/firmware/config.txt || echo "include config_vc-mipi-driver-bcm2712.txt" | sudo tee -a /boot/firmware/config.txt
+
+install: all
+	sudo install -p -m 644  $(SENSORDRIVERS)	/lib/modules/$(shell uname -r)/kernel/drivers/media/i2c/
+	# sudo install -p -m 644  $(DEVICETREES)	 $(BOOT_OVERLAYS_DIR)/
+	sudo /sbin/depmod -a $(shell uname -r)
+
 uninstall:
 	sudo rm -f $(foreach sencommon,$(SENSOR_DRIVER),$(KERNEL_I2C_DIR)/$(sencommon).ko)
 	sudo rm -f $(foreach dtbo,$(DEVICETREES_RM),$(BOOT_OVERLAYS_DIR)/$(dtbo))

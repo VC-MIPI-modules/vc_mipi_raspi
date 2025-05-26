@@ -37,7 +37,8 @@ override_dh_auto_install:
 
 	# Device Tree Files
 	cd $(DEST_SRC_DIR)/overlays && $(MAKE) all
-
+	rm -f $(DEST_SRC_DIR)/set_rpi4_pipeline
+	
 	cp src/overlays/config_vc-mipi-driver-${MODULE_VERSION}.txt $(DEST_BOOT_DIR)/firmware/
 	chmod 644 $(DEST_BOOT_DIR)/firmware/config_vc-mipi-driver-${MODULE_VERSION}.txt
 	cp src/vc-config $(CURDIR)/debian/tmp/usr/local/bin/
@@ -47,7 +48,8 @@ override_dh_auto_install:
 	cp debian/postrm $(DEST_DKMS_DIR)/debian/ 
 	chmod 755 $(DEST_DKMS_DIR)/debian/postinst
 	chmod 755 $(DEST_DKMS_DIR)/debian/postrm	
-
+	cp src/set_rpi4_pipeline $(CURDIR)/debian/tmp/usr/local/bin/
+	chmod 755 $(CURDIR)/debian/tmp/usr/local/bin/set_rpi4_pipeline
 	chmod -R 644 $(DEST_BOOT_DIR)/firmware/overlays/
 	
 	# Ensure the file is copied before running dh_install
