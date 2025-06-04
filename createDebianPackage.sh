@@ -6,7 +6,7 @@ modules=("bcm2711" "bcm2712" )
 
 # Set version if not set
 if [ -z "$VERSION_DEB_PACKAGE" ]; then
-    export VERSION_DEB_PACKAGE="0.6.3"
+    export VERSION_DEB_PACKAGE="0.6.4"
 fi
 
 

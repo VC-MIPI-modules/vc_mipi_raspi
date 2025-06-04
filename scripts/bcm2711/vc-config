@@ -200,7 +200,62 @@ get_format_entity()
 
     echo "$format"
 }
+configure_video_device() {
 
+    local subdev=$1
+    local videodev=$2
+
+        
+    for mediadev in /dev/media*; do
+        echo "Checking $mediadev..."
+        
+        # Skip if not a valid media device
+        if ! [ -e "$mediadev" ]; then
+            continue
+        fi
+        
+        # Get media device number
+        media_num=$(echo "$mediadev" | grep -o '[0-9]*$')
+        
+        # Check if this media device has video0
+        if media-ctl -d "$mediadev" -p | grep -q "$videodev"; then
+            echo "Found $videodev on $mediadev"
+            
+            # Your existing script logic here
+        
+            media-ctl -d "$mediadev" -r
+
+            mediabus_code=$(get_mediabus_code $subdev )
+
+            # Print the mediabus code
+            echo "Mediabus code of subdevice $subdev: '$mediabus_code'"
+            fmt=$(map_mediabus_to_fourcc $mediabus_code)
+            echo "Format of subdevice $subdev: $fmt"
+
+            resolution=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
+            width=$(echo $resolution | awk -F 'x' '{ print $1 }')
+            height=$(echo $resolution | awk -F 'x' '{ print $2 }')
+            mediabusfmt=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15- | xargs echo -n)
+            format="$mediabusfmt/$resolution"
+
+            entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
+            echo media-ctl -d "$mediadev" -p | grep -B 3 "$subdev"
+            echo "Code: $fmt"
+            media-ctl -d "$mediadev" -l ''\'"$entity_name"\'':0 -> '\''unicam-image'\'':0 [1]' 
+            
+            v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb
+            echo "v4l2-ctl -d $videodev --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb"
+            #read a
+            if ! timeout 5 v4l2-ctl --verbose --stream-mmap --device=$videodev --stream-count=3; then
+                echo "No image recorded for $videodev" | sudo tee /dev/kmsg
+            fi
+            
+                                   
+           
+            return
+        fi
+    done
+}
 set_roi() {
 
     local subdev=$1

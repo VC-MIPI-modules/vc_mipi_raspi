@@ -11,7 +11,7 @@
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-event.h>
 
-#define VERSION "0.6.3"
+#define VERSION "0.6.4"
 
 int debug = 3;
 // --- Prototypes --------------------------------------------------------------
@@ -238,9 +238,7 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
 
         case V4L2_CID_VC_BINNING_MODE:
                 ret = vc_core_set_binning_mode(cam, control->value);
-                mutex_unlock(&device->mutex);                
-                        vc_sd_update_fmt(device);
-                mutex_lock(&device->mutex);
+                vc_sd_update_fmt(device);
 
                 return ret;
 
