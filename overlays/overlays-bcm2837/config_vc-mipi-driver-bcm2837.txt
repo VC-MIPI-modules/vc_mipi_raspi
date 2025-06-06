@@ -31,7 +31,7 @@
 ### Sony(IMX...       )           => cam0_manu_sony
 
 
-dtoverlay=vc-mipi-bcm2711-cam0
+dtoverlay=vc-mipi-bcm2837-cam0
 dtparam=cam0_lanes2
 dtparam=cam0_manu_sony
 dtparam=cam0_libcamera_off
@@ -57,7 +57,7 @@ dtparam=cam0_libcamera_off
 ### Omnivision (OV7251,OV9281)    => cam1_manu_ov
 ### Sony(IMX...       )           => cam1_manu_sony
 
-dtoverlay=vc-mipi-bcm2711-cam1
+dtoverlay=vc-mipi-bcm2837-cam1
 dtparam=cam1_lanes2
 dtparam=cam1_manu_sony
 dtparam=cam1_libcamera_off

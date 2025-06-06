@@ -12,12 +12,12 @@
 
 / {    
 	fragment@0 {
-		target = <&csi0>;
+		target = <&csi1>;
 		__overlay__ {
 			status = "okay";
 
 			port {
-				csi0_ep: endpoint {
+				csi1_ep: endpoint {
 					remote-endpoint = <&vc_mipi_cam0_ep>;
 					data-lanes = <1>;
 				};
@@ -25,7 +25,7 @@
 		};
 	};	
 	fragment@1 {
-		target = <&i2c_csi_dsi>;
+		target = <&i2c_csi_dsi0>;
 		__overlay__ {
 
 			status = "okay";
@@ -37,7 +37,7 @@
 				status = "okay";				
 				port {
 					vc_mipi_cam0_ep: endpoint {
-						remote-endpoint = <&csi0_ep>;
+						remote-endpoint = <&csi1_ep>;
 						data-lanes = <1>;
 
 					};
@@ -60,7 +60,7 @@
 		};
 	};
 	fragment@1001 {
-		target = <&i2c_csi_dsi>;
+		target = <&i2c_csi_dsi0>;
 		__dormant__ {
 			camera0 {
 				port {
@@ -73,7 +73,7 @@
 		};
 	};
 	fragment@1002 {
-		target = <&i2c_csi_dsi>;
+		target = <&i2c_csi_dsi0>;
 		__dormant__ {
 			camera0 {
 				port {
@@ -86,7 +86,7 @@
 		};
 	};
 	fragment@1004 {
-		target = <&i2c_csi_dsi>;
+		target = <&i2c_csi_dsi0>;
 		__dormant__ {
 			camera0 {
 				port {
@@ -99,7 +99,7 @@
 		};
 	};
 	fragment@2001 {
-		target = <&csi0>;
+		target = <&csi1>;
 		__dormant__ {
 			status = "okay";
 			brcm,num-data-lanes = <0x01>;
@@ -112,7 +112,7 @@
 		};
 	};
 	fragment@2002 {
-		target = <&csi0>;
+		target = <&csi1>;
 		__dormant__ {
 			status = "okay";
 			brcm,num-data-lanes = <0x02>;
@@ -125,7 +125,7 @@
 		};
 	};
 	fragment@2004 {
-		target = <&csi0>;
+		target = <&csi1>;
 		__dormant__ {
 			status = "okay";
 			brcm,num-data-lanes = <0x04>;
