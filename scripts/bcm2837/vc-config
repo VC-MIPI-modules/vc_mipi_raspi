@@ -137,7 +137,7 @@ configure_device_tree() {
             break
         fi 
 
-        config_file="/boot/firmware/config_vc-mipi-driver-bcm2711.txt"
+        config_file="/boot/firmware/config_vc-mipi-driver-bcm2837.txt"
 
         current_lanes=$(grep "^dtparam="$camera"_lanes" "$config_file" | awk -F 'lanes' '{print $2}')
         current_manu=$(grep "^dtparam="$camera"_manu_" "$config_file" | awk -F '_manu_' '{print $2}')
