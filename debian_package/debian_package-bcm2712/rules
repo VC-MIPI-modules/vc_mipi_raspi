@@ -53,9 +53,7 @@ override_dh_auto_install:
 	chmod 755 $(CURDIR)/debian/tmp/etc/udev/rules.d/99-camera-setup.rules
 
 	cp debian/postinst $(DEST_DKMS_DIR)/debian/ 
-	cp debian/postrm $(DEST_DKMS_DIR)/debian/ 
 	chmod 755 $(DEST_DKMS_DIR)/debian/postinst
-	chmod 755 $(DEST_DKMS_DIR)/debian/postrm	
 
 	chmod -R 644 $(DEST_BOOT_DIR)/firmware/overlays/
 	

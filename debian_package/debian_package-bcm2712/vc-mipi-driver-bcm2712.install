@@ -6,7 +6,6 @@ usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/*.txt u
 usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/Makefile usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/overlays/
 
 usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/debian/postinst usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/debian/
-usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/debian/postrm usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/debian/
 
 usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/*.dtbo  usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/
 usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/Makefile  usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/

@@ -124,12 +124,6 @@ uninstall:
 	sudo rm -f $(foreach sencommon,$(SENSOR_DRIVER),$(KERNEL_I2C_DIR)/$(sencommon).ko)
 	sudo rm -f $(foreach dtbo,$(DEVICETREES_RM),$(BOOT_OVERLAYS_DIR)/$(dtbo))
 	sudo /sbin/depmod -a $(shell uname -r)
-	@echo "--------------------------------------"
-	@echo
-	@echo "  Call  debian/postrm  for deactivating the configuration file in your /boot/config.txt"
-	@echo "  You may remove the configuration file /boot/config_vc-mipi-driver-bcm2712.txt for cleanup"
-	@echo
-	@echo "--------------------------------------"
 
 
 $(KERNEL_BUILD_DIR):
