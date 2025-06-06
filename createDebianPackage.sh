@@ -1,7 +1,7 @@
 sudo rm -rf build
 mkdir -p build
 
-modules=("bcm2711" "bcm2712" )
+modules=("bcm2837" )
 
 
 # Set version if not set
@@ -20,6 +20,22 @@ VC_MODULES_FILE="src/vc_mipi_core/vc_mipi_modules.h"
 sed -i "s/^#define VERSION \".*\"/#define VERSION \"$VERSION_DEB_PACKAGE\"/" $VC_CAMERA_FILE
 sed -i "s/^#define VERSION \".*\"/#define VERSION \"$VERSION_DEB_PACKAGE\"/" $VC_CORE_FILE
 sed -i "s/^#define VERSION \".*\"/#define VERSION \"$VERSION_DEB_PACKAGE\"/" $VC_MODULES_FILE
+
+
+process_debian_template() {
+    local src_dir="$1"
+    local build_dir="$2"
+    local template="$3"
+    local dest="$4"
+
+    if [ -f "$src_dir/$template" ]; then
+        envsubst '$VERSION_DEB_PACKAGE $MODULE_VERSION' < "$src_dir/$template" > "$build_dir/$dest"
+        # Make executable if it's a script
+        if [[ "$dest" == "postinst" || "$dest" == "postrm" || "$dest" == "rules" ]]; then
+            chmod ug+x "$build_dir/$dest"
+        fi
+    fi
+}
 
 rm -rf build
 mkdir -p build
@@ -43,20 +59,27 @@ for module in "${modules[@]}"; do
     rsync -a --exclude='.env' src/ $BUILD_DIR/src/
 
     DEB_BUILD_OPTIONS="KERNEL_HEADERS=$KERNEL_HEADERS" 
-
-    envsubst '$VERSION_DEB_PACKAGE $MODULE_VERSION' < $SRC_DEB_DIR/changelog > $BUILD_DIR/debian/changelog
     envsubst '$VERSION_DEB_PACKAGE $MODULE_VERSION' < dkms.conf > $BUILD_DIR/dkms.conf
-    envsubst '$VERSION_DEB_PACKAGE $MODULE_VERSION' < $SRC_DEB_DIR/control > $BUILD_DIR/debian/control
-    envsubst '$VERSION_DEB_PACKAGE $MODULE_VERSION' < $SRC_DEB_DIR/not-installed > $BUILD_DIR/debian/not-installed
-    envsubst '$VERSION_DEB_PACKAGE $MODULE_VERSION' < $SRC_DEB_DIR/postinst > $BUILD_DIR/debian/postinst
-    envsubst '$VERSION_DEB_PACKAGE $MODULE_VERSION' < $SRC_DEB_DIR/postrm > $BUILD_DIR/debian/postrm
-    envsubst '$VERSION_DEB_PACKAGE $MODULE_VERSION' < $SRC_DEB_DIR/rules > $BUILD_DIR/debian/rules
-    envsubst '$VERSION_DEB_PACKAGE $MODULE_VERSION' < $SRC_DEB_DIR/vc-mipi-driver-$module.install > $BUILD_DIR/debian/vc-mipi-driver-$module.install 
 
-    chmod ug+x $BUILD_DIR/debian/postinst
-    chmod ug+x $BUILD_DIR/debian/postrm
-    chmod ug+x $BUILD_DIR/debian/rules
+    debian_templates=(
+    "changelog:changelog"
+    "control:control"
+    "not-installed:not-installed"
+    "postinst:postinst"
+    "postrm:postrm"
+    "rules:rules"
+    "vc-mipi-driver-$module.install:vc-mipi-driver-$module.install"
+    )
 
+    for template_pair in "${debian_templates[@]}"; do
+        IFS=":" read -r template dest <<< "$template_pair"
+        # Expand $module in file names
+        template="${template//\$module/$module}"
+        dest="${dest//\$module/$module}"
+        process_debian_template "$SRC_DEB_DIR" "$BUILD_DIR/debian" "$template" "$dest"
+    done
+
+   
     cd $BUILD_DIR
     sudo -E dpkg-buildpackage -us -uc -b
     cd ../..

@@ -1,8 +1,8 @@
 DTC ?= dtc
 DTC_FLAGS ?= -@ -I dts -O dtb -Wno-unit_address_vs_reg
 
-SENSOR_NAMES := vc-mipi-bcm2711-cam0
-SENSOR_NAMES += vc-mipi-bcm2711-cam1
+SENSOR_NAMES := vc-mipi-bcm2837-cam0
+SENSOR_NAMES += vc-mipi-bcm2837-cam1
 SENSOR_NAMES += vc-mipi-common-memory-contiguous
 DEVICETREES	:= $(foreach sentype,$(SENSOR_NAMES),$(sentype).dtbo)
 DEVICETREES_RM := $(foreach sentype,$(SENSOR_NAMES),$(sentype).dtbo)

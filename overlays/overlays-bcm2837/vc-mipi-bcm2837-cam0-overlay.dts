@@ -1,0 +1,150 @@
+//
+// Definitions for cam 0 for RaspberryPi 3
+//
+// Copyright (C) 2025 - Florian Schmid, Vision Components GmbH
+//
+
+
+
+
+/dts-v1/;
+/plugin/;
+
+/ {    
+	fragment@0 {
+		target = <&csi0>;
+		__overlay__ {
+			status = "okay";
+			brcm,num-data-lanes = <0x01>;
+
+			port {
+				csi0_ep: endpoint {
+					remote-endpoint = <&vc_mipi_cam0_ep>;
+					data-lanes = <1>;
+				};
+			};
+		};
+	};	
+	fragment@1 {
+		target = <&i2c_csi_dsi>;
+		__overlay__ {
+
+			status = "okay";
+ 			#address-cells = <1>;
+            #size-cells = <0>;
+			vc_mipi_cam0: camera0 {
+				compatible = "vc,vc_mipi_camera";
+				reg = <0x1a>;
+				status = "okay";				
+				port {
+					vc_mipi_cam0_ep: endpoint {
+						remote-endpoint = <&csi0_ep>;
+						data-lanes = <1>;
+
+					};
+				};
+			};
+		};
+	};
+	fragment@2 {
+		target = <&i2c0mux>;
+		__overlay__ {
+			status = "okay";
+
+		};
+	};
+	fragment@3 {
+		target = <&i2c0if>;
+		__overlay__ {
+			status = "okay";
+
+		};
+	};
+	fragment@1001 {
+		target = <&i2c_csi_dsi>;
+		__dormant__ {
+			camera0 {
+				port {
+						endpoint {
+							data-lanes = <1>;
+
+						};
+					};
+				};
+		};
+	};
+	fragment@1002 {
+		target = <&i2c_csi_dsi>;
+		__dormant__ {
+			camera0 {
+				port {
+						endpoint {
+							data-lanes = <1 2>;
+
+						};
+					};
+				};
+		};
+	};
+	fragment@1004 {
+		target = <&i2c_csi_dsi>;
+		__dormant__ {
+			camera0 {
+				port {
+						endpoint {
+							data-lanes = <1 2 3 4>;
+
+						};
+					};
+				};
+		};
+	};
+	fragment@2001 {
+		target = <&csi0>;
+		__dormant__ {
+			status = "okay";
+			port {
+				endpoint {
+					data-lanes = <1>;
+
+				};
+			};
+		};
+	};
+	fragment@2002 {
+		target = <&csi0>;
+		__dormant__ {
+			status = "okay";
+			port {
+				endpoint {
+					data-lanes = <1 2>;
+
+				};
+			};
+		};
+	};
+	fragment@2004 {
+		target = <&csi0>;
+		__dormant__ {
+			status = "okay";
+			port {
+				endpoint {
+					data-lanes = <1 2 3 4>;
+
+				};
+			};
+		};
+	};
+
+
+	__overrides__ {
+        cam0_lanes1 		=      <0>,"+1+2+3=1001=2001";
+		cam0_lanes2 		=      <0>,"+1+2+3=1002=2002";
+		cam0_lanes4 		=      <0>,"+1+2+3=1004=2004";		
+		cam0_lanes0 		= 	   <0>,"";
+		cam0_manu_ov	   	=      <&vc_mipi_cam0>,"reg:0=",<0x60>;
+		cam0_libcamera_on 	=      <&vc_mipi_cam0>,"libcamera";
+
+
+    };
+};

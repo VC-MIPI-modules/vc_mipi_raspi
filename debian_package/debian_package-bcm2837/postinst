@@ -1,0 +1,90 @@
+#!/bin/sh
+# Copyright (C) 2002-2005 Flavio Stanchina
+# Copyright (C) 2005-2006 Aric Cyr
+# Copyright (C) 2007 Mario Limonciello
+# Copyright (C) 2009 Alberto Milone
+
+set -e
+TEST=0
+NAME="vc-mipi-driver-${MODULE_VERSION}"
+VERSION="$VERSION_DEB_PACKAGE"
+PACKAGE_NAME=$NAME
+DEB_NAME=$(echo $PACKAGE_NAME | sed 's,_,-,')
+CVERSION=`dpkg-query -W -f='${VERSION}' $DEB_NAME | awk -F "-" '{print $1}' | cut -d\: -f2`
+ARCH=`dpkg --print-architecture`
+
+dkms_configure () {
+    echo "DEBUG: NAME is $NAME"
+
+    for POSTINST in /usr/lib/dkms/common.postinst "/usr/share/$PACKAGE_NAME/debian/postinst"; do
+        if [ -f "$POSTINST" ]; then
+            echo "Running $POSTINST ${NAME} ${VERSION} /usr/share/$PACKAGE_NAME $ARCH $2"
+            "$POSTINST" "${NAME}" "${VERSION}" "/usr/share/$PACKAGE_NAME" "$ARCH" "$2"
+            return $?
+        fi
+        echo "WARNING: $POSTINST does not exist." >&2
+    done
+    echo "ERROR: DKMS version is too old and $PACKAGE_NAME was not" >&2
+    echo "built with legacy DKMS support." >&2
+    echo "You must either rebuild $PACKAGE_NAME with legacy postinst" >&2
+    echo "support or upgrade DKMS to a more current version." >&2
+    return 1
+}
+
+add_config () 
+{
+
+    echo "Adding config files to /boot/firmware"
+
+  
+    if [ -d /usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION}/overlays ]; then
+        echo "Copying overlay files"
+        cp -rf /usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION}/overlays /boot/firmware/ || true
+
+    fi
+
+    if [ -f /usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/99-camera-setup.rules ]; then
+        echo "Copying udev rule"
+        cp -rf /usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/99-camera-setup.rules /etc/udev/rules.d/ || true
+    fi
+        if [ -d /usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION}/overlays ]; then
+        echo "Copying overlay files"
+        cp -rf /usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION}/overlays /boot/firmware/ || true
+    fi
+    if [ -f /usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/overlays/config_vc-mipi-driver-${MODULE_VERSION}.txt ]; then
+         echo "Copying config file config_vc-mipi-driver-${MODULE_VERSION}.txt"
+         cp -f /usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/overlays/config_vc-mipi-driver-${MODULE_VERSION}.txt /boot/firmware/ || true
+    fi
+
+
+    CONFIG_FILE="/boot/firmware/config.txt"
+
+    # Backup config
+    cp $CONFIG_FILE ${CONFIG_FILE}.bak
+
+    # Add dtoverlay lines if not present
+    if ! grep -q "include config_vc-mipi-driver-${MODULE_VERSION}.txt" "$CONFIG_FILE"; then
+        echo "include config_vc-mipi-driver-${MODULE_VERSION}.txt" >> "$CONFIG_FILE"
+    fi
+}
+
+case "$1" in
+    configure)
+        dkms_configure configure
+        add_config
+    ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+
+udevadm control --reload-rules
+udevadm trigger
+#DEBHELPER#
+
+exit 0

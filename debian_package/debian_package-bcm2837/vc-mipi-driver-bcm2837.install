@@ -1,0 +1,25 @@
+var/lib/dkms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source/dkms.conf var/lib/dkms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source/
+
+usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/dkms.conf usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/
+usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/Makefile usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/
+usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/*.txt usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/overlays/
+
+usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/debian/postinst usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/debian/
+
+usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/*.dtbo  usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/
+usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/Makefile  usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/
+
+usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/vc_mipi_camera/*.c usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/vc_mipi_camera/
+usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/vc_mipi_camera/Makefile usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/vc_mipi_camera/
+
+usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/vc_mipi_core/*.c usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/vc_mipi_core/
+usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/vc_mipi_core/*.h usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/vc_mipi_core/
+usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/vc_mipi_core/Makefile usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/vc_mipi_core/
+usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/vc_mipi_core/Kbuild usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/vc_mipi_core/
+
+etc/udev/rules.d/99-camera-setup.rules usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/
+etc/udev/rules.d/99-camera-setup.rules etc/udev/rules.d/
+usr/local/bin/set_rpi3_pipeline usr/local/bin/
+usr/local/bin/vc-config usr/local/bin/
+usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/vc-config usr/local/bin
+

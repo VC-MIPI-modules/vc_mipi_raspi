@@ -1,0 +1,156 @@
+//
+// Definitions for cam 1 for RaspberryPi 3
+//
+// Copyright (C) 2025 - Florian Schmid, Vision Components GmbH
+//
+
+
+
+
+/dts-v1/;
+/plugin/;
+
+/ {
+    fragment@0 {
+     
+		target = <&csi1>;
+		__overlay__ {
+			status = "okay";
+
+			port {
+				csi2_ep: endpoint {
+					remote-endpoint = <&vc_mipi_cam1_ep>;
+					data-lanes = <1 2 3 4>;
+
+				};
+			};
+		};
+	};
+	fragment@1 {
+		target = <&i2c_csi_dsi0>;
+		status = "okay";
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+			brcm,media-controller;
+
+			vc_mipi_cam1: camera1{				
+				compatible = "vc,vc_mipi_camera";
+				reg = <0x1a>;
+				status = "okay";
+				port {
+					vc_mipi_cam1_ep: endpoint {
+						remote-endpoint = <&csi2_ep>;
+						data-lanes = <1 2 3 4>;
+
+					};
+				};
+			};
+		};
+	};
+	fragment@2 {
+		target = <&i2c0mux>;
+		__overlay__ {
+			status = "okay";
+
+		};
+	};
+	fragment@3 {
+		target = <&i2c0if>;
+		__overlay__ {
+			status = "okay";
+
+		};
+	};
+	fragment@1001 {
+		target = <&i2c_csi_dsi0>;
+		__dormant__ {
+			camera1 {
+				port {
+						endpoint {
+							data-lanes = <1>;
+
+						};
+					};
+				};
+		};
+	};
+	fragment@1002 {
+		target = <&i2c_csi_dsi0>;
+		__dormant__ {
+			camera1 {
+				port {
+						endpoint {
+							data-lanes = <1 2>;
+
+						};
+					};
+				};
+		};
+	};
+	fragment@1004 {
+		target = <&i2c_csi_dsi0>;
+		__dormant__ {
+			camera1 {
+				port {
+						endpoint {
+							data-lanes = <1 2 3 4>;
+
+						};
+					};
+				};
+		};
+	};
+	fragment@2001 {
+		target = <&csi1>;
+		__dormant__ {
+			status = "okay";
+            brcm,num-data-lanes = <0x01>;
+			port {
+				endpoint {
+					data-lanes = <1>;
+
+				};
+			};
+		};
+	};
+	fragment@2002 {
+		target = <&csi1>;
+		__dormant__ {
+			status = "okay";
+            brcm,num-data-lanes = <0x02>;
+
+			port {
+				endpoint {
+					data-lanes = <1 2>;
+
+				};
+			};
+		};
+	};
+	fragment@2004 {
+		target = <&csi1>;
+		__dormant__ {
+			status = "okay";
+            brcm,num-data-lanes = <0x04>;
+			port {
+				endpoint {
+					data-lanes = <1 2 3 4>;
+
+				};
+			};
+		};
+	};
+
+	__overrides__ {
+        cam1_lanes1 	   	=      <0>,"+1+2+3=1001=2001";
+		cam1_lanes2 	   	=      <0>,"+1+2+3=1002=2002";
+		cam1_lanes4 	   	=      <0>,"+1+2+3=1004=2004";		
+		cam1_lanes0 	   	= 	   <0>,"";
+		cam1_manu_ov	   	=      <&vc_mipi_cam1>,"reg:0=",<0x60>;
+		cam1_libcamera_on	=      <&vc_mipi_cam1>,"libcamera";
+
+
+    };
+};
