@@ -17,7 +17,7 @@ installDeps:
 
 installLibPisp:
 	cd /tmp && rm -rf /tmp/libpisp && \
-	git clone https://github.com/raspberrypi/libpisp || true && \
+	git clone https://github.com/VC-MIPI-modules/libpisp || true && \
 	cd libpisp && \
 	meson setup build && \
 	meson compile -C build && \
