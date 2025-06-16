@@ -163,6 +163,33 @@ get_format_entity()
 
     echo "$format"
 }
+get_mediadevice() {
+    local subdev=$1
+    subdev=${subdev#/dev/}
+    for mediadev in /dev/media*; do
+        if media-ctl -d "$mediadev" -p | grep -q "$subdev"; then
+            echo "$mediadev"
+            return
+        fi
+    done
+    exit 1
+    
+}
+get_cropping() {
+    local subdev=$1
+    local mediadev
+    mediadev=$(get_mediadevice "$subdev")
+    echo "Using media device: $mediadev" >&2
+    local entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
+    local cropping_line=$(media-ctl -d "$mediadev" -p | grep -A 6 "$entity_name" | grep crop: | awk -F ':' '{ print $2 }' | awk -F ' ' '{print $1}')
+    echo "$cropping_line" >&2
+    local left=$(echo "$cropping_line" | awk -F '[(),]' '{print $2}')
+    local top=$(echo "$cropping_line" | awk -F '[(),]' '{print $3}')
+    local width=$(echo "$cropping_line" | awk -F '[x/]' '{print $2}')
+    local height=$(echo "$cropping_line" | awk -F '[x/]' '{print $3}' | awk '{print $1}')
+    echo "Cropping values: left=$left, top=$top, width=$width, height=$height" >&2
+    echo "$left $top $width $height"
+}
 
 configure_video_device() {
 
@@ -287,6 +314,74 @@ set_roi() {
         fi
     done
 }
+set_cropping()
+{
+    local subdev=$1
+    local videodev=$2
+    local width=$3
+    local height=$4
+    local left=$5
+    local top=$6
+
+    if [ $subdev = "" ]; then
+        echo "No subdevice specified"
+        return
+    fi
+    if [ $videodev = "" ]; then
+        echo "No video device specified"
+        return
+    fi
+
+        
+     for mediadev in /dev/media*; do
+        echo "Checking $mediadev..."
+        
+        # Skip if not a valid media device
+        if ! [ -e "$mediadev" ]; then
+            continue
+        fi
+        
+        # Get media device number
+        media_num=$(echo "$mediadev" | grep -o '[0-9]*$')
+        
+        # Check if this media device has video0
+        if media-ctl -d "$mediadev" -p | grep -q "$videodev"; then
+            echo "Found $videodev on $mediadev"
+            
+            # Your existing script logic here
+        
+            media-ctl -d "$mediadev" 
+
+            mediabus_code=$(get_mediabus_code $subdev )
+
+            # Print the mediabus code
+            echo "Mediabus code of subdevice $subdev: '$mediabus_code'"
+            fmt=$(map_mediabus_to_fourcc $mediabus_code)
+
+            mediabusfmt=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15- | xargs echo -n)
+
+            #read a
+            entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
+            echo media-ctl -d "$mediadev" -p | grep -B 3 "$subdev"
+            echo "Code: $fmt"
+            echo "media-ctl -d $mediadev --set-v4l2 \"'$entity_name':0[crop:(${left},${top})/${width}x${height}]\""
+            media-ctl -d $mediadev --set-v4l2 "'$entity_name':0[crop:(${left},${top})/${width}x${height}]" 
+            media-ctl -d $mediadev -V "'csi2':0 [fmt:$mediabusfmt/${width}x${height} field:none colorspace:srgb]" 
+
+            v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb 
+
+            if v4l2-ctl --verbose  --stream-mmap --device=$videodev --stream-count=3;then
+                whiptail --infobox "Successfully set ROI to $width x $height" 8 40 --title "Success"
+                sleep 1
+            else
+                whiptail --infobox "Failed to set ROI to $width x $height" 8 40 --ok-button "OK" --title "Error"
+                sleep 1
+            fi
+            return
+        fi
+    done
+
+}
 set_format() {
 
     local videodev=$1
@@ -388,6 +483,33 @@ dialog_set_roi()
     echo "Width: $width, Height: $height, Subdevice: $subdev, Device: $videodev"
     set_roi "$subdev" "$videodev" "$width" "$height"
     
+}
+dialog_set_cropping()
+{
+    local subdev=$1
+    local videodev=$2
+
+    read cur_left cur_top cur_width cur_height <<< $(get_cropping "$subdev")
+
+
+    # Use whiptail to prompt the user to enter width and height
+    width=$(whiptail --inputbox "Enter the desired width:" 8 40 $cur_width 3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        return
+    fi 
+    height=$(whiptail --inputbox "Enter the desired height:" 8 40 $cur_height 3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        return
+    fi 
+    left=$(whiptail --inputbox "Enter the left offset:" 8 40 $cur_left 3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        return
+    fi
+    top=$(whiptail --inputbox "Enter the top offset:" 8 40 $cur_top 3>&1 1>&2 2>&3)
+
+    echo "Selected subdevice: $subdev"
+    echo "Width: $width, Height: $height, Subdevice: $subdev, Device: $videodev"
+    set_cropping "$subdev" "$videodev" "$width" "$height" "$left" "$top"
 }
 dialog_set_debuglevel()
 {
@@ -513,12 +635,13 @@ configure_subdev_controls() {
     local videodev=$2
 
     # Get all available controls for the subdevice
-    controls=$(v4l2-ctl --device=$subdev --list-ctrls | grep -v "flags=read-only" | awk '{print $1}')
+    controls=$(v4l2-ctl --device=$subdev --list-ctrls | grep -v "flags=read-only" | grep -v " Controls" | grep -v "(button)" | awk '{print $1}' | grep -v '^$')
 
     while true; do
         # Create menu options for whiptail
         menu_options=()
         menu_options+=("Set ROI" "Set the region of interest")
+        menu_options+=("Set Cropping" "Set the cropping area")
         menu_options+=("Configure Device Tree" "Configure the lanes for the mipi sensors")
         menu_options+=("Format" "Set the format of the camera")
         menu_options+=("Logging" "Set logging level")
@@ -543,6 +666,10 @@ configure_subdev_controls() {
         fi    
         if([ "$selected_control" == "Set ROI" ]); then
             dialog_set_roi "$subdev" "$videodev"
+            continue
+        fi
+        if([ "$selected_control" == "Set Cropping" ]); then
+            dialog_set_cropping "$subdev" "$videodev"
             continue
         fi
         if([ "$selected_control" == "Logging" ]); then

@@ -11,7 +11,7 @@
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-event.h>
 
-#define VERSION "0.6.4"
+#define VERSION "0.6.5"
 
 int debug = 3;
 // --- Prototypes --------------------------------------------------------------
@@ -444,57 +444,49 @@ static int vc_sd_get_selection(struct v4l2_subdev *sd,
                                struct v4l2_subdev_state *cfg,
                                struct v4l2_subdev_selection *sel)
 {
-    struct vc_cam *cam = to_vc_cam(sd);
-    __u8 h_scale, v_scale;
-    vc_get_binning_scale(cam, &h_scale, &v_scale);
+        struct vc_cam *cam = to_vc_cam(sd);
+        struct vc_device *device = to_vc_device(sd);
+        struct vc_frame *frame = vc_core_get_frame(cam);
+        struct vc_frame *frame_bounds = &cam->ctrl.frame;
 
-    struct v4l2_rect r;
-    switch(sel->target)
-    {
-        case V4L2_SEL_TGT_COMPOSE:
-        case V4L2_SEL_TGT_COMPOSE_DEFAULT:
-        case V4L2_SEL_TGT_COMPOSE_BOUNDS:
-            r.left = cam->ctrl.frame.left / h_scale;
-            r.top = cam->ctrl.frame.top / v_scale;
-            r.width = cam->ctrl.frame.width / h_scale;
-            r.height = cam->ctrl.frame.height / v_scale;
-            sel->r = r;
-            return 0;
+        mutex_lock(&device->mutex);
+
+        switch (sel->target) {
         case V4L2_SEL_TGT_CROP:
+                sel->r.left = frame->left;
+                sel->r.top = frame->top;
+                sel->r.width = frame->width;
+                sel->r.height = frame->height;
+                break;
         case V4L2_SEL_TGT_CROP_DEFAULT:
         case V4L2_SEL_TGT_CROP_BOUNDS:
-        r.left = cam->ctrl.frame.left / h_scale;
-        r.top = cam->ctrl.frame.top / v_scale;
-        r.width = cam->ctrl.frame.width / h_scale;
-        r.height = cam->ctrl.frame.height / v_scale;
-        sel->r = r;
-        return 0;
+                sel->r.left = frame_bounds->left;
+                sel->r.top = frame_bounds->top;
+                sel->r.width = frame_bounds->width;
+                sel->r.height = frame_bounds->height;
+                break;
+        }
 
-        
+        mutex_unlock(&device->mutex);
+
+        return 0;        
     }
-
-   
-    return -1;
-}
-
+    
 static int vc_sd_set_selection(struct v4l2_subdev *sd,
                                struct v4l2_subdev_state *cfg,
                                struct v4l2_subdev_selection *sel)
 {
     struct vc_device *device = to_vc_device(sd);
     struct vc_cam *cam = to_vc_cam(sd);
-    struct v4l2_rect rect;
+    struct device *dev = &device->cam.ctrl.client_sen->dev;
 
     if (sel->target != V4L2_SEL_TGT_CROP)
         return -EINVAL;
 
-    rect.left = clamp_t(s32, ALIGN(sel->r.left, 2), 0, cam->ctrl.frame.width - 2);
-    rect.top = clamp_t(s32, ALIGN(sel->r.top, 2), 0, cam->ctrl.frame.height - 2);
-    rect.width = clamp_t(s32, ALIGN(sel->r.width, 2), 2, cam->ctrl.frame.width - rect.left);
-    rect.height = clamp_t(s32, ALIGN(sel->r.height, 2), 2, cam->ctrl.frame.height - rect.top);
+   vc_core_set_frame(cam, sel->r.left, sel->r.top, sel->r.width, sel->r.height);
 
-    device->crop_rect = rect;
-    sel->r = rect;
+    vc_dbg(dev, "Rect: left=%d, top=%d, width=%d, height=%d\n",
+           sel->r.left, sel->r.top, sel->r.width, sel->r.height);
 
     return 0;
 }
