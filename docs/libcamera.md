@@ -21,7 +21,7 @@ sudo apt install -y meson cmake
 sudo apt install -y python3-yaml python3-ply
 sudo apt install -y libglib2.0-dev libgstreamer-plugins-base1.0-dev
 sudo apt install -y cmake libboost-program-options-dev libdrm-dev libexif-dev
-git clone https://github.com/raspberrypi/libpisp
+git clone https://github.com/VC-MIPI-modules/libpisp
 cd libpisp
 meson setup build
 meson compile -C build
