@@ -47,7 +47,7 @@ enum private_cids
         V4L2_CID_VC_FRAME_RATE,
         V4L2_CID_VC_SINGLE_TRIGGER,
         V4L2_CID_VC_BINNING_MODE,
-        V4L2_CID_VC_ROI_POSITION,
+        V4L2_CID_LIVE_ROI,
         V4L2_CID_VC_NAME,
 };
 
@@ -242,7 +242,7 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
 
                 return ret;
 
-        case V4L2_CID_VC_ROI_POSITION:
+        case V4L2_CID_LIVE_ROI:
                 return vc_core_live_roi(cam, control->value);
 
 
@@ -476,17 +476,19 @@ static int vc_sd_set_selection(struct v4l2_subdev *sd,
                                struct v4l2_subdev_state *cfg,
                                struct v4l2_subdev_selection *sel)
 {
-    struct vc_device *device = to_vc_device(sd);
-    struct vc_cam *cam = to_vc_cam(sd);
-    struct device *dev = &device->cam.ctrl.client_sen->dev;
+        struct vc_device *device = to_vc_device(sd);
+        struct vc_cam *cam = to_vc_cam(sd);
+        struct device *dev = &device->cam.ctrl.client_sen->dev;
 
-    if (sel->target != V4L2_SEL_TGT_CROP)
-        return -EINVAL;
+        if (sel->target != V4L2_SEL_TGT_CROP)
+                return -EINVAL;
 
-   vc_core_set_frame(cam, sel->r.left, sel->r.top, sel->r.width, sel->r.height);
+        vc_core_set_frame(cam, sel->r.left, sel->r.top, sel->r.width, sel->r.height);
 
-    vc_dbg(dev, "Rect: left=%d, top=%d, width=%d, height=%d\n",
-           sel->r.left, sel->r.top, sel->r.width, sel->r.height);
+        vc_dbg(dev, "Rect: left=%d, top=%d, width=%d, height=%d\n",
+                sel->r.left, sel->r.top, sel->r.width, sel->r.height);
+
+       
 
     return 0;
 }
@@ -516,8 +518,15 @@ int vc_ctrl_s_ctrl(struct v4l2_ctrl *ctrl)
 static int vc_ctrl_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
 {
         struct vc_device *device = container_of(ctrl->handler, struct vc_device, ctrl_handler);
+        struct vc_cam *cam = &device->cam;
         if (ctrl->id == V4L2_CID_VC_NAME) {
                 strscpy(ctrl->p_new.p_char, device->cam.desc.sen_type, ctrl->maximum);
+                return 0;
+        }
+        if (ctrl->id == V4L2_CID_LIVE_ROI) {
+                ctrl->val = cam->state.binning_mode * 100000000 +
+                        cam->state.frame.left * 10000 +
+                        cam->state.frame.top;
                 return 0;
         }
     return -EINVAL;
@@ -834,16 +843,16 @@ static const struct v4l2_ctrl_config ctrl_binning_mode = {
     .def = 0,
 };
 
-static const struct v4l2_ctrl_config ctrl_roi_position = {
-    .ops = &vc_ctrl_ops,
-    .id = V4L2_CID_VC_ROI_POSITION,
-    .name = "Roi Position",
-    .type = V4L2_CTRL_TYPE_INTEGER,
-    .flags = V4L2_CTRL_FLAG_EXECUTE_ON_WRITE,
-    .min = 0,
-    .max = 199999999,
-    .step = 1,
-    .def = 0,
+static const struct v4l2_ctrl_config ctrl_live_roi = {
+        .ops = &vc_ctrl_ops,
+        .id = V4L2_CID_LIVE_ROI,
+        .name = "Live Roi",
+        .type = V4L2_CTRL_TYPE_INTEGER,
+        .flags = V4L2_CTRL_FLAG_EXECUTE_ON_WRITE | V4L2_CTRL_FLAG_VOLATILE,
+        .min = 0,
+        .max = 999999999,
+        .step = 1,
+        .def = 0,
 };
 
 static const struct v4l2_ctrl_config ctrl_blacklevel = {
@@ -999,7 +1008,7 @@ static int vc_sd_init(struct vc_device *device)
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_frame_rate, &ctrl);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_single_trigger, &ctrl);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_binning_mode, &ctrl);
-        ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_roi_position, &ctrl);
+        ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_live_roi, &ctrl);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_name, &ctrl);
 
         ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_PIXEL_RATE, &pixel_rate, 0);
