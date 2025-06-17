@@ -1,0 +1,69 @@
+//
+// Definitions for the VC CMI v.1.0 board
+//
+// Copyright (C) 2020 - Martin Engel, Vision Components GmbH
+//
+
+/dts-v1/;
+/plugin/;
+
+
+/{
+	compatible = "brcm,bcm2835";
+
+	fragment@0 {
+		target = <&gpio>;
+		__overlay__ {
+			
+			plcio-out0 {
+				gpio-hog;
+				output-high;
+				gpios = <4 1>;
+				line-name = "PLC Out 0";
+			};
+			plcio-out1 {
+				gpio-hog;
+				output-high;
+				gpios = <5 1>;
+				line-name = "PLC Out 1";
+			};
+			plcio-out2 {
+				gpio-hog;
+				output-high;
+				gpios = <6 1>;
+				line-name = "PLC Out 2";
+			};
+			plcio-out3 {
+				gpio-hog;
+				output-high;
+				gpios = <7 1>;
+				line-name = "PLC Out 3";
+			};
+			plcio-in0 {
+				gpio-hog;
+				input;
+				gpios = <12>;
+				line-name = "PLC In 0";
+			};
+			plcio-in1 {
+				gpio-hog;
+				input;
+				gpios = <13>;
+				line-name = "PLC In 1";
+			};
+			plcio-in2 {
+				gpio-hog;
+				input;
+				gpios = <16>;
+				line-name = "PLC In 2";
+			};
+			plcio-in3 {
+				gpio-hog;
+				input;
+				gpios = <17>;
+				line-name = "PLC In 3";
+			};
+		};
+	};
+};
+

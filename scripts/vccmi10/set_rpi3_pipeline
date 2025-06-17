@@ -1,0 +1,173 @@
+#!/bin/bash
+
+# Find all media devices and check for video0
+frontend_device="unicam-image"
+
+
+map_mediabus_to_fourcc() {
+    local mediabus_code=$1
+    local mediabusfmt=""
+    case $mediabus_code in
+        "0x3001")
+            mediabusfmt="BA81" #MEDIA_BUS_FMT_SBGGR8_1X8
+            ;;
+        "0x3002")
+            mediabusfmt="GRBG" #MEDIA_BUS_FMT_SGRBG8_1X8
+            ;;
+        "0x3013")
+            mediabusfmt="GBRG" #MEDIA_BUS_FMT_SGBRG8_1X8
+            ;;
+        "0x3014")
+            mediabusfmt="RGGB" #MEDIA_BUS_FMT_SRGGB8_1X8
+            ;;
+        "0x2001")
+            mediabusfmt="GREY" #MEDIA_BUS_FMT_Y8_1X8
+            ;;
+        "0x300e")
+            mediabusfmt="pGAA" #MEDIA_BUS_FMT_SGBRG10_1X10
+            ;;
+        "0x300f")
+            mediabusfmt="pRAA" #MEDIA_BUS_FMT_SRGGB10_1X10
+            ;;
+        "0x200a")
+            mediabusfmt="Y10P" #MEDIA_BUS_FMT_Y10_1X10
+            ;;
+        "0x300a")
+            mediabusfmt="pgAA" #MEDIA_BUS_FMT_SGRBG10_1X10
+            ;;
+        "0x3007") 
+            mediabusfmt="pBAA" #MEDIA_BUS_FMT_SBGGR10_1X10
+            ;;
+        "0x3008")
+            mediabusfmt="pBCC" #MEDIA_BUS_FMT_SBGGR12_1X12
+            ;;
+        "0x3010")
+            mediabusfmt="pGCC" #MEDIA_BUS_FMT_SGBRG12_1X12 
+            ;;
+        "0x3011")
+            mediabusfmt="pgCC" #MEDIA_BUS_FMT_SGRBG12_1X12
+            ;;
+        "0x3012")
+            mediabusfmt="pRCC" #MEDIA_BUS_FMT_SRGGB12_1X12
+            ;;
+        "0x2013")
+            mediabusfmt="Y12P" #MEDIA_BUS_FMT_Y12_1X12
+            ;;       
+        "0x3019")
+            mediabusfmt="pBEE" #MEDIA_BUS_FMT_SBGGR14_1X14
+            ;;
+        "0x301a")
+            mediabusfmt="pGEE" #MEDIA_BUS_FMT_SGBRG14_1X14
+            ;;
+        "0x301b")
+            mediabusfmt="pgEE" #MEDIA_BUS_FMT_SGRBG14_1X14
+            ;;
+        "0x301c")
+            mediabusfmt="pREE" #MEDIA_BUS_FMT_SRGGB14_1X14
+            ;;
+        "0x202d")
+            mediabusfmt="Y14P" #MEDIA_BUS_FMT_Y14_1X14
+            ;;	
+        "0x301d")
+            mediabusfmt="BYR2" #MEDIA_BUS_FMT_SBGGR16_1X16
+            ;;
+        "0x301e")
+            mediabusfmt="GB16" #MEDIA_BUS_FMT_SGBRG16_1X16
+            ;;
+        "0x301f")
+            mediabusfmt="GR16" #MEDIA_BUS_FMT_SGRBG16_1X16
+            ;;
+        "0x3020")
+            mediabusfmt="RG16" #MEDIA_BUS_FMT_SRGGB16_1X16
+            ;;
+        "0x202e")
+            mediabusfmt="Y16 " #MEDIA_BUS_FMT_Y16_1X16
+            ;;       
+       
+        
+        *)
+            echo "Unknown mediabus code: $mediabus_code"
+            exit 1
+            ;;
+    esac
+    echo "$mediabusfmt"
+
+}
+get_mediabus_code() {
+    local subdev=$1
+
+    # Use v4l2-ctl to get the format of the subdevice and extract the mediabus code
+    v4l2-ctl --device=$subdev --get-subdev-fmt pad=0 | grep "Mediabus Code" | awk '{print $4}'
+}
+
+configure_video_device() {
+
+    local subdev=$1
+    local videodev=$2
+
+        
+    for mediadev in /dev/media*; do
+        echo "Checking $mediadev..."
+        
+        # Skip if not a valid media device
+        if ! [ -e "$mediadev" ]; then
+            continue
+        fi
+        
+        # Get media device number
+        media_num=$(echo "$mediadev" | grep -o '[0-9]*$')
+        
+        # Check if this media device has video0
+        if media-ctl -d "$mediadev" -p | grep -q "$videodev"; then
+            echo "Found $videodev on $mediadev"
+            
+            # Your existing script logic here
+        
+            media-ctl -d "$mediadev" -r
+
+            mediabus_code=$(get_mediabus_code $subdev )
+
+            # Print the mediabus code
+            echo "Mediabus code of subdevice $subdev: '$mediabus_code'"
+            fmt=$(map_mediabus_to_fourcc $mediabus_code)
+            echo "Format of subdevice $subdev: $fmt"
+
+            resolution=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
+            width=$(echo $resolution | awk -F 'x' '{ print $1 }')
+            height=$(echo $resolution | awk -F 'x' '{ print $2 }')
+            mediabusfmt=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15- | xargs echo -n)
+            format="$mediabusfmt/$resolution"
+
+            entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
+            echo media-ctl -d "$mediadev" -p | grep -B 3 "$subdev"
+            echo "Code: $fmt"
+            media-ctl -d "$mediadev" -l ''\'"$entity_name"\'':0 -> '\''unicam-image'\'':0 [1]' 
+            
+            v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb
+            echo "v4l2-ctl -d $videodev --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb"
+            #read a
+            if ! timeout 5 v4l2-ctl --verbose --stream-mmap --device=$videodev --stream-count=3; then
+                echo "No image recorded for $videodev" | sudo tee /dev/kmsg
+            fi
+            
+                                   
+           
+            return
+        fi
+    done
+}
+# Check if arguments are provided
+if [ "$#" -lt 2 ]; then
+   
+    for mediadev in /dev/media*; do
+        if media-ctl -d "$mediadev" -p | grep -q "vc_mipi_camera"; then
+            subdev=$(media-ctl -d "$mediadev" -p | grep "vc_mipi_camera" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
+            dev=$(media-ctl -d "$mediadev" -p | grep "$frontend_device" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
+
+            configure_video_device "$subdev" "$dev" 
+        fi
+    done
+    exit 0
+fi
+
+configure_video_device "$1" "$2" 

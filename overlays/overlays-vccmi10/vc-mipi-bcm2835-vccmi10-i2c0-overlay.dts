@@ -1,0 +1,23 @@
+
+//
+// Definitions for the RaspberryPi 3B+ board
+//
+// Copyright (C) 2020 - Martin Engel, Vision Components GmbH
+//
+
+/dts-v1/;
+/plugin/;
+
+
+/{
+	compatible = "brcm,bcm2708";
+
+	/****** Choices for GPIO pins used for i2c0 *****/
+	fragment@0 {
+		target = <&i2c0mux>;
+		__overlay__ {
+			pinctrl-0 = <&i2c0_gpio44>; /* i2c0        */
+			pinctrl-1 = <&i2c0_gpio0>;  /* i2c_csi_dsi */
+		};
+	};
+};

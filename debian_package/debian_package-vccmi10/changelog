@@ -1,0 +1,5 @@
+vc-mipi-driver-vccmi10 (${VERSION_DEB_PACKAGE}) unstable; urgency=medium
+
+  * Initial release
+
+ -- Florian Schmid <florian.schmid@vision-components.com>  Wed, 14 Nov 2024 10:00:00 +0100

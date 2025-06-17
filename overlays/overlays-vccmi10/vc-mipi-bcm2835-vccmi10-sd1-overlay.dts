@@ -1,0 +1,67 @@
+/dts-v1/;
+/plugin/;
+
+/* This file is a copy of  sdio-overlay.dts. */
+/* Changes have been applied for the VC Compute Module Interface. */
+/* Enable SDIO from MMC interface via various GPIO groups */
+
+/{
+	compatible = "brcm,bcm2835";
+
+	fragment@0 {
+		target = <&mmcnr>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@1 {
+		target = <&soc>;
+		__overlay__ {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			
+			sdio_ovl: mmc@7e300000 {
+				compatible = "brcm,bcm2835-mmc","brcm,bcm2835-sdhci";
+				reg = <0x7e300000 0x100>;
+				interrupts = <2 30>;
+				clocks = <&clocks 28/*BCM2835_CLOCK_EMMC*/>;
+				max-frequency = <40000000>;
+				dmas = <&dma 11>;
+				dma-names = "rx-tx";
+				brcm,overclock-50 = <0>;
+				status = "okay";
+				pinctrl-names = "default";
+				pinctrl-0 = <&sdio_ovl_pins>;
+				/*non-removable;*/
+				/*bus-width = <4>;*/
+				bus-width = <8>;
+			};
+		};
+	};
+
+	fragment@2 {
+		target = <&gpio>;
+		__overlay__ {
+			sdio_ovl_pins: sdio_ovl_pins {
+				brcm,function = <7>; /* ALT3 = SD1 */
+				/*brcm,pins = <34 35 36 37 38 39>;*/
+				/*brcm,pull = <0 2 2 2 2 2>;*/
+				brcm,pins = <34 35 36 37 38 39 40 41 42 43>;
+				brcm,pull = <0 2 2 2 2 2 2 2 2 2>;
+			};
+		};
+	};
+
+	fragment@3 {
+		target-path = "/aliases";
+		__overlay__ {
+			mmc1 = "/soc/mmc@7e300000";
+		};
+	};
+
+	__overrides__ {
+		bus_width = <&sdio_ovl>,"bus-width:0";
+		sdio_overclock = <&sdio_ovl>,"brcm,overclock-50:0";
+	};
+};

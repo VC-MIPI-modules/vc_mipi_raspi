@@ -1,0 +1,48 @@
+//
+// Definitions for the Soft-I2C Bus 3 and Real Time Clock on the VC CMI Board.
+//
+// Copyright (C) 2020 - Michael Steinel, Martin Engel, Vision Components GmbH
+//
+
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2835";
+
+	/****** i2c3 via Soft-GPIO *****/
+	fragment@0 {
+		target-path = "/";
+		__overlay__ {
+			i2c3: i2c-gpio@3 {
+				compatible = "i2c-gpio";
+				#address-cells = <1>;
+				#size-cells = <0>;
+                        	status = "okay";
+
+				sda-gpios = <&gpio 23 0>;
+				scl-gpios = <&gpio 24 0>;
+				i2c-gpio,delay-us = <0>;
+			};
+		};
+	};
+       
+	/****** Real-Time Clock at i2c3 *****/
+        fragment@1 {
+                target = <&i2c3>;
+                __overlay__ {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+                        ds1374: ds1374@68 {
+                                compatible = "dallas,ds1374";
+                                status = "okay";
+
+                                trickle-resistor-ohms = <2000>;
+                                reg = <0x68>;
+                        };
+                };
+        };
+
+};

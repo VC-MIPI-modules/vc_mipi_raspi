@@ -1,7 +1,7 @@
 sudo rm -rf build
 mkdir -p build
 
-modules=("bcm2837"  "bcm2711" "bcm2712" )
+modules=("bcm2837"  "bcm2711" "bcm2712" "vccmi10")
 
 
 # Set version if not set
@@ -80,7 +80,7 @@ for module in "${modules[@]}"; do
 
    
     cd $BUILD_DIR
-    sudo -E dpkg-buildpackage -us -uc -b
+    sudo -E dpkg-buildpackage -us -uc -F
     cd ../..
 
 done

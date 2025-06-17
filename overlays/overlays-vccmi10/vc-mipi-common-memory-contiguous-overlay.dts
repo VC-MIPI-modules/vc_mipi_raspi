@@ -1,0 +1,23 @@
+//
+// Allocation for contiguous memory, needed by Image Captures
+//
+// Copyright (C) 2020 - Martin Engel, Vision Components GmbH
+//
+
+/dts-v1/;
+/plugin/;
+
+/{
+	compatible = "brcm,bcm2708";
+
+	fragment@0 {
+		target-path = "/reserved-memory";
+		__overlay__ {
+
+			linux,cma {
+
+				size = <0x8000000>; /* 128MiB */
+			};
+		};
+	};
+};

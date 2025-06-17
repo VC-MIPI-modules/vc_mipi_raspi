@@ -1,0 +1,45 @@
+//
+// Definitions for the VC CMI v.1.0 board
+//
+// Copyright (C) 2020 - Martin Engel, Vision Components GmbH
+//
+
+/dts-v1/;
+/plugin/;
+
+
+/{
+	compatible = "brcm,bcm2835";
+
+	fragment@0 {
+		target = <&gpio>;
+		__overlay__ {
+			
+			fpgaio-out0 {
+				gpio-hog;
+				output-high;
+				gpios = <18 1>;
+				line-name = "FPGA Out 0";
+			};
+			fpgaio-out1 {
+				gpio-hog;
+				output-high;
+				gpios = <19 1>;
+				line-name = "FPGA Out 1";
+			};
+			fpgaio-in0 {
+				gpio-hog;
+				input;
+				gpios = <20>;
+				line-name = "FPGA In 0";
+			};
+			fpgaio-in1 {
+				gpio-hog;
+				input;
+				gpios = <21>;
+				line-name = "FPGA In 1";
+			};
+		};
+	};
+};
+

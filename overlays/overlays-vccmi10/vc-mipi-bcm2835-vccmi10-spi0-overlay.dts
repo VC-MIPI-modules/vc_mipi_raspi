@@ -1,0 +1,29 @@
+//
+// Definitions for the VC CMI v.1.0 board
+//
+// Copyright (C) 2020 - Martin Engel, Vision Components GmbH
+//
+
+/dts-v1/;
+/plugin/;
+
+
+/{
+	compatible = "brcm,bcm2835";
+
+	fragment@0 {
+		target = <&spi0>;
+		__overlay__ {
+			status = "okay";
+			cs-gpios = <&gpio 8 1>;
+		};
+	};
+	fragment@1 {
+		target = <&spi0_cs_pins>;
+		__overlay__ {
+			brcm,pins = <8>;
+			brcm,function = <4>; /* ALT0:  SPIO0_CE0_N */
+		};
+	};
+};
+
