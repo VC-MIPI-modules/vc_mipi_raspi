@@ -425,7 +425,7 @@ set_format() {
     cur_width=$(echo $resolution | awk -F 'x' '{ print $1 }')
     cur_height=$(echo $resolution | awk -F 'x' '{ print $2 }')
 
-    v4l2-ctl -d "$videodev" --set-fmt-video=width=$cur_width,height=$cur_height,pixelformat=$fmt,colorspace=srgb 
+    v4l2-ctl -d "$videodev" --set-fmt-video=width=$cur_width,height=$cur_height,pixelformat="$fmt",colorspace=srgb 
 
     v4l2-ctl --verbose  --stream-mmap --device=$videodev --stream-count=3
     sleep 2        

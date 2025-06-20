@@ -11,7 +11,7 @@
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-event.h>
 
-#define VERSION "0.6.5"
+#define VERSION_CAMERA "0.6.6"
 
 int debug = 3;
 // --- Prototypes --------------------------------------------------------------
@@ -1150,8 +1150,9 @@ static struct i2c_driver vc_i2c_driver = {
 
 module_i2c_driver(vc_i2c_driver);
 
-MODULE_VERSION(VERSION);
+MODULE_VERSION(VERSION_CAMERA);
 MODULE_DESCRIPTION("Vision Components GmbH - VC MIPI CSI-2 driver");
+MODULE_AUTHOR("Florian Schmid, Vision Components GmbH <florian.schmid@vision-components.com>");
 MODULE_AUTHOR("Peter Martienssen, Liquify Consulting <peter.martienssen@liquify-consulting.de>");
 MODULE_AUTHOR("Michael Steinel, Vision Components GmbH <mipi-tech@vision-components.com>");
 MODULE_LICENSE("GPL v2");

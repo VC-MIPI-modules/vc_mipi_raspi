@@ -6,9 +6,11 @@ modules=("bcm2837"  "bcm2711" "bcm2712" "vccmi10")
 
 # Set version if not set
 if [ -z "$VERSION_DEB_PACKAGE" ]; then
-    export VERSION_DEB_PACKAGE="0.6.5"
+    export VERSION_DEB_PACKAGE="0.6.6"
 fi
-
+if [ -z "$VERSION_CORE" ]; then
+    export VERSION_CORE="0.6.6"
+fi
 
 # Delete v from version
 export VERSION_DEB_PACKAGE=$(echo $VERSION_DEB_PACKAGE | sed 's/v//')
@@ -17,9 +19,9 @@ VC_CAMERA_FILE="src/vc_mipi_camera/vc_mipi_camera.c"
 VC_CORE_FILE="src/vc_mipi_core/vc_mipi_core.h"
 VC_MODULES_FILE="src/vc_mipi_core/vc_mipi_modules.h"
 
-sed -i "s/^#define VERSION \".*\"/#define VERSION \"$VERSION_DEB_PACKAGE\"/" $VC_CAMERA_FILE
-sed -i "s/^#define VERSION \".*\"/#define VERSION \"$VERSION_DEB_PACKAGE\"/" $VC_CORE_FILE
-sed -i "s/^#define VERSION \".*\"/#define VERSION \"$VERSION_DEB_PACKAGE\"/" $VC_MODULES_FILE
+sed -i "s/^#define VERSION_CAMERA \".*\"/#define VERSION_CAMERA \"$VERSION_DEB_PACKAGE\"/" $VC_CAMERA_FILE
+sed -i "s/^#define VERSION \".*\"/#define VERSION \"$VERSION_CORE\"/" $VC_CORE_FILE
+sed -i "s/^#define VERSION \".*\"/#define VERSION \"$VERSION_CORE\"/" $VC_MODULES_FILE
 
 
 process_debian_template() {

@@ -49,7 +49,7 @@ installRPICamApps:
 	git clone https://github.com/raspberrypi/rpicam-apps.git && \
 	cd rpicam-apps && \
 	git checkout v1.6.0 && \
-	meson setup build && \
+	meson setup build  --buildtype=release --prefix=/usr && \
 	meson compile -C build && \
 	sudo meson install -C build
 	@printf "%s\n" \

@@ -234,7 +234,7 @@ configure_video_device() {
             media-ctl -d "$mediadev" -V ''\''csi2'\'':4 [fmt:'"$format"' field:none colorspace:srgb]' 
             media-ctl -d "$mediadev" -V ''\''csi2'\'':0 [fmt:'"$format"' field:none colorspace:srgb]' 
             media-ctl -d "$mediadev" -l ''\''csi2'\'':4 -> '\''rp1-cfe-csi2_ch0'\'':0 [1]' 
-            v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb 
+            v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat="$fmt",colorspace=srgb 
             #read a
             if ! timeout 5 v4l2-ctl --verbose --stream-mmap --device=$videodev --stream-count=3; then
                 echo "No image recorded for $videodev" | sudo tee /dev/kmsg
