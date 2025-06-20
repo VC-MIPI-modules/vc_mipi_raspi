@@ -419,18 +419,68 @@ set_roi() {
 }
 set_format() {
 
-    local videodev=$1      
-    local fmt=$2    
-    resolution=$(v4l2-ctl --device=$videodev --all | grep 'Width/Height' | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
-    cur_width=$(echo $resolution | awk -F 'x' '{ print $1 }')
-    cur_height=$(echo $resolution | awk -F 'x' '{ print $2 }')
+    local videodev=$1
+    local mediabusfmt=$2
+        
+    for mediadev in /dev/media*; do
+        echo "Checking $mediadev..."
+        
+        # Skip if not a valid media device
+        if ! [ -e "$mediadev" ]; then
+            continue
+        fi
+        
+        # Get media device number
+        media_num=$(echo "$mediadev" | grep -o '[0-9]*$')
+        
+        # Check if this media device has video0
+        if media-ctl -d "$mediadev" -p | grep -q "$videodev"; then
+            echo "Found $videodev on $mediadev"
+            
 
-    v4l2-ctl -d "$videodev" --set-fmt-video=width=$cur_width,height=$cur_height,pixelformat=$fmt,colorspace=srgb 
+            media-ctl -d "$mediadev" -r
 
-    v4l2-ctl --verbose  --stream-mmap --device=$videodev --stream-count=3
-    sleep 2        
-    
+
+            # Print the mediabus code
+
+            entity_name=$(get_entity_name $mediadev)
+            echo "Entity name: $entity_name"
+
+
+
+            resolution=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
+            width=$(echo $resolution | awk -F 'x' '{ print $1 }')
+            height=$(echo $resolution | awk -F 'x' '{ print $2 }')
+            format="$mediabusfmt/$resolution"
+
+            echo "$mediadev" -V ''\''vc_mipi_camera '$entity_name''\'':0 [fmt:'$format' field:none colorspace:srgb]'
+            media-ctl -d "$mediadev" -V "'vc_mipi_camera $entity_name':0 [fmt:$format field:none colorspace:srgb]"
+
+            new_format=$(get_format_entity $subdev)
+            echo "New format: '$new_format'"
+            if([ "$new_format" != "$format" ]); then
+                echo "Failed to set format to $mediabusfmt"
+                whiptail --msgbox "Failed to set format to $mediabusfmt Format is probably not supported by sensor" 8 40 --ok-button "OK" --title "Error" 
+                sleep 1
+                
+                return
+            fi
+
+            mediabus_code=$(get_mediabus_code $subdev )
+            fmt=$(map_mediabus_to_fourcc $mediabus_code)
+
+            v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb 
+
+            v4l2-ctl --verbose  --stream-mmap --device=$videodev --stream-count=3
+            sleep 2
+            
+                                   
+           
+            return
+        fi
+    done
 }
+
 
 dialog_set_roi() 
 {
@@ -445,11 +495,11 @@ dialog_set_roi()
     # Use whiptail to prompt the user to enter width and height
     width=$(whiptail --inputbox "Enter the desired width:" 8 40 $cur_width 3>&1 1>&2 2>&3)
     if [ $? -ne 0 ]; then
-        break
+        return
     fi 
     height=$(whiptail --inputbox "Enter the desired height:" 8 40 $cur_height 3>&1 1>&2 2>&3)
     if [ $? -ne 0 ]; then
-        break
+        return
     fi 
 
     echo "Selected subdevice: $subdev"
@@ -543,8 +593,8 @@ dialog_set_format()
 
        menu_options_format=(
         "Y8" "Greyscale 8-bit"
-        "Y10" "Greyscale 10-bit"
-        "Y12" "Greyscale 12-bit"
+        "Y10P" "Greyscale 10-bit"
+        "Y12P" "Greyscale 12-bit"
         "Y14" "Bayer Y14 14-bit"
         "Y16" "Greyscale 16-bit"
         "BGGR8" "Bayer BGGR 8-bit"
@@ -595,7 +645,7 @@ dialog_get_versions()
 
 get_entity_name() {
     local mediadev=$1
-    local entity_name=$(media-ctl -d "$mediadev" -p | grep "vc_mipi_camera" | awk -F 'vc_mipi_camera' '{print $2}' | awk '{print $1}' | tail -n +2 |head -n 1)
+    local entity_name=$(media-ctl -d "$mediadev" -p | grep " vc_mipi_camera " | awk -F 'vc_mipi_camera ' '{print $2}' | awk '{print $1}'  |head -n 1)
     if [ -z "$entity_name" ]; then
         echo "Error: vc_mipi_camera not found in $mediadev" >&2
         exit 1
