@@ -85,18 +85,17 @@ clean:
 	-rm -f $(DEVICETREES)
 
 reload:
-	-@LOGGING_LEVEL=$$(cat /sys/module/vc_mipi_core/parameters/debug)
-	-sudo modprobe -r bcm2835-unicam
-	-sudo modprobe -r rp1_cfe 
-	-sudo modprobe -r vc_mipi_camera
-	-sudo modprobe -r vc_mipi_modules
-	-sudo modprobe -r vc_mipi_core
-
-	-sudo modprobe bcm2835-unicam
-	-sudo modprobe rp1_cfe verbose_debug=1
-	-sudo modprobe vc_mipi_core
-	-sudo modprobe vc_mipi_modules
-	-sudo modprobe vc_mipi_camera
+	@LOGGING_LEVEL=$$(cat /sys/module/vc_mipi_core/parameters/debug 2>/dev/null || echo 3); \
+	sudo modprobe -r bcm2835-unicam; \
+	sudo modprobe -r rp1_cfe; \
+	sudo modprobe -r vc_mipi_camera; \
+	sudo modprobe -r vc_mipi_modules; \
+	sudo modprobe -r vc_mipi_core; \
+	sudo modprobe bcm2835-unicam; \
+	sudo modprobe rp1_cfe verbose_debug=1; \
+	sudo modprobe vc_mipi_core; \
+	sudo modprobe vc_mipi_modules; \
+	sudo modprobe vc_mipi_camera; \
 	echo $$LOGGING_LEVEL | sudo tee /sys/module/vc_mipi_core/parameters/debug >/dev/null
 unload:
 	-sudo modprobe -r vc_mipi_camera

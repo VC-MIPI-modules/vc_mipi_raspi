@@ -226,17 +226,18 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
         struct vc_device *device = to_vc_device(sd);
         int ret = 0;
         vc_mode *mode = vc_get_mode(cam);
-
+        int num_lanes = mode->num_lanes;
         switch (control->id)
         {
 
         case V4L2_CID_HBLANK:
-                vc_core_set_hmax_overwrite(cam, mode->hmax + control->value);
+                vc_core_set_hmax_overwrite(cam, mode->hmax + (control->value & ~num_lanes) / num_lanes);
+                vc_notice(dev, "%s(): Set HBLANK: %d\n", __func__, control->value);
                 vc_sen_set_hmax(cam);
                 return 0;
                 
         case V4L2_CID_VBLANK:
-                vc_core_set_vmax_overwrite(cam,mode->vmax.def + control->value);
+                vc_core_set_vmax_overwrite(cam, cam->ctrl.frame.height + control->value);
                 vc_sen_write_vmax(&cam->ctrl, cam->state.vmax_overwrite);
                 return 0;
         case V4L2_CID_HFLIP:
@@ -970,7 +971,7 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
 
 
         hblank.min = 0 ;
-        hblank.max = 0;
+        hblank.max = 10000;
         hblank.def = hblank.min;
 
 
