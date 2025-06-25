@@ -71,6 +71,8 @@ struct vc_device
         struct v4l2_mbus_framefmt format;
         struct vc_cam cam;
         bool libcamera_enabled;
+        __u32 supported_mbus_codes[MAX_MBUS_CODES];
+
 };
 static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam);
 
@@ -89,6 +91,11 @@ static inline struct vc_cam *to_vc_cam(struct v4l2_subdev *sd)
 static        struct vc_control hblank; 
 static        struct vc_control vblank; 
 static        struct vc_control pixel_rate; 
+// Unsupported mbus codes for libcamera
+static int unsupported_mbus_codes[1]=
+{
+        MEDIA_BUS_FMT_Y14_1X14
+};
 
 static struct vc_control64 linkfreq  = {
         .min = 0,
@@ -105,6 +112,39 @@ static void vc_get_binning_scale(struct vc_cam *cam, __u8 *h_scale, __u8 *v_scal
 
     *h_scale = binning->h_factor == 0 ? 1 : binning->h_factor;
     *v_scale = binning->v_factor == 0 ? 1 : binning->v_factor;
+}
+// Libcamera does not support all mbus codes, so we need to filter them out
+static void vc_init_supported_mbus_codes(struct vc_device *device)
+{
+        struct vc_cam *cam = &device->cam;
+        struct device *dev = &device->cam.ctrl.client_sen->dev;
+
+        int i, j, counter = 0;
+
+        for (i = 0; i < MAX_MBUS_CODES; i++) {
+                device->supported_mbus_codes[i] = 0;
+        }
+
+        for (i = 0; i < MAX_MBUS_CODES; i++) {
+                if(device->libcamera_enabled)
+                {
+                        for(j = 0; j < ARRAY_SIZE(unsupported_mbus_codes); j++)
+                        {
+                                if (cam->ctrl.mbus_codes[i] == unsupported_mbus_codes[j])
+                                {
+                                        vc_dbg(dev, "%s(): Skipping unsupported mbus code: 0x%04x\n", __func__, cam->ctrl.mbus_codes[i]);
+                                        goto skip_code;
+                                }
+                                
+
+                        }
+                }
+                vc_notice(dev, "%s(): Adding mbus code: 0x%04x\n", __func__, cam->ctrl.mbus_codes[i]);                
+                device->supported_mbus_codes[counter] = cam->ctrl.mbus_codes[i];
+                counter++;
+                skip_code:
+                ;
+        }
 }
 // --- v4l2_subdev_core_ops ---------------------------------------------------
 
@@ -366,11 +406,11 @@ static int vc_sd_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state
 
 int vc_sd_enum_mbus_code(struct v4l2_subdev *sd, struct v4l2_subdev_state *state, struct v4l2_subdev_mbus_code_enum *code)
 {
-        struct vc_cam *cam = to_vc_cam(sd);
+        struct vc_device *device = to_vc_device(sd);
         int i;
         for(i = 0; i < MAX_MBUS_CODES; i++)
         {
-               if(cam->ctrl.mbus_codes[i] == 0)
+               if(device->supported_mbus_codes[i] == 0)
                break;
         }
 
@@ -378,9 +418,8 @@ int vc_sd_enum_mbus_code(struct v4l2_subdev *sd, struct v4l2_subdev_state *state
 		return -EINVAL;
         if (code->pad == IMAGE_PAD) {
 		if (code->index >= i)
-			return -EINVAL;
-
-		code->code = cam->ctrl.mbus_codes[code->index];
+			return -EINVAL;               
+		code->code = device->supported_mbus_codes[code->index];
 
 	} else {
 		if (code->index > 0)
@@ -411,8 +450,8 @@ int vc_sd_enum_frame_size(struct v4l2_subdev *sd, struct v4l2_subdev_state *cfg,
 
         bool format_supported = false;
 
-        for (codeIx = 0; codeIx < ARRAY_SIZE(cam->ctrl.mbus_codes); codeIx++) {
-                if (cam->ctrl.mbus_codes[codeIx] == fse->code) {
+        for (codeIx = 0; codeIx < ARRAY_SIZE(device->supported_mbus_codes); codeIx++) {
+                if (device->supported_mbus_codes[codeIx] == fse->code) {
                         format_supported = true;
                         break;         
                 }       
@@ -1067,6 +1106,8 @@ static int vc_probe(struct i2c_client *client)
     if (ret)
         goto error_power_off;
 
+
+    vc_init_supported_mbus_codes(device);    
     vc_mod_set_mode(cam, &ret); 
     ret = vc_sd_init(device);
     if (ret)
