@@ -1,0 +1,66 @@
+#!/bin/sh
+# Copyright (C) Vision Components
+# Pre-installation script for vc-mipi-driver-${MODULE_VERSION}
+
+set -e
+
+NAME="vc-mipi-driver-${MODULE_VERSION}"
+VERSION="${VERSION_DEB_PACKAGE}"
+PACKAGE_NAME=$NAME
+
+cleanup_broken_state () {
+    echo "Checking for broken DKMS state"
+    
+    # Check if there are any broken DKMS installations
+    if dkms status | grep -q "$NAME" 2>/dev/null; then
+        echo "Found existing DKMS installation, cleaning up"
+        
+        # Try to remove any existing DKMS modules
+        for existing_version in $(dkms status | grep "$NAME" | cut -d'/' -f2 | cut -d',' -f1 | sort -u); do
+            echo "Removing existing DKMS module $NAME/$existing_version"
+            dkms remove "$NAME/$existing_version" --all 2>/dev/null || true
+        done
+    fi
+    
+    # Clean up any leftover directories that might cause conflicts
+    if [ -d "/var/lib/dkms/$NAME" ]; then
+        echo "Removing leftover DKMS directories"
+        rm -rf "/var/lib/dkms/$NAME" || true
+    fi
+    
+    # Clean up old source directories
+    for src_dir in /usr/src/$NAME-*; do
+        if [ -d "$src_dir" ]; then
+            echo "Removing old source directory: $src_dir"
+            rm -rf "$src_dir" || true
+        fi
+    done
+    
+    # Clean up old shared directories
+    for share_dir in /usr/share/$NAME*-dkms; do
+        if [ -d "$share_dir" ]; then
+            echo "Removing old shared directory: $share_dir"
+            rm -rf "$share_dir" || true
+        fi
+    done
+}
+
+case "$1" in
+    install)
+        echo "Pre-installation: new install"
+        cleanup_broken_state
+        ;;
+    upgrade)
+        echo "Pre-installation: upgrade from $2"
+        cleanup_broken_state
+        ;;
+    abort-upgrade)
+        echo "Pre-installation: abort upgrade"
+        ;;
+    *)
+        echo "preinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

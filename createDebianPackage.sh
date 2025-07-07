@@ -1,15 +1,16 @@
+#!/bin/bash
 sudo rm -rf build
 mkdir -p build
 
-modules=("bcm2837"  "bcm2711" "bcm2712" "vccmi10")
+modules=("bcm2712")
 
 
 # Set version if not set
 if [ -z "$VERSION_DEB_PACKAGE" ]; then
-    export VERSION_DEB_PACKAGE="0.6.6"
+    export VERSION_DEB_PACKAGE="0.6.8"
 fi
 if [ -z "$VERSION_CORE" ]; then
-    export VERSION_CORE="0.6.6"
+    export VERSION_CORE="0.6.7"
 fi
 
 # Delete v from version
@@ -33,8 +34,8 @@ process_debian_template() {
     if [ -f "$src_dir/$template" ]; then
         envsubst '$VERSION_DEB_PACKAGE $MODULE_VERSION' < "$src_dir/$template" > "$build_dir/$dest"
         # Make executable if it's a script
-        if [[ "$dest" == "postinst" || "$dest" == "rules" ]]; then
-            chmod ug+x "$build_dir/$dest"
+        if [[ "$dest" == "postinst" || "$dest" == "preinst" || "$dest" == "prerm" || "$dest" == "postrm" || "$dest" == "rules" ]]; then
+            chmod +x "$build_dir/$dest"
         fi
     fi
 }
@@ -68,6 +69,9 @@ for module in "${modules[@]}"; do
     "control:control"
     "not-installed:not-installed"
     "postinst:postinst"
+    "preinst:preinst"
+    "prerm:prerm"
+    "postrm:postrm"
     "rules:rules"
     "vc-mipi-driver-$module.install:vc-mipi-driver-$module.install"
     )
@@ -81,9 +85,9 @@ for module in "${modules[@]}"; do
     done
 
    
-    cd $BUILD_DIR
+    cd $BUILD_DIR || exit 1
     sudo -E dpkg-buildpackage -us -uc -F
-    cd ../..
+    cd ../.. || exit 1
 
 done
 

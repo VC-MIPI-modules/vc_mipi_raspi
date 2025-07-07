@@ -1,0 +1,60 @@
+#!/bin/sh
+# Copyright (C) Vision Components
+# Post-removal script for vc-mipi-driver-${MODULE_VERSION}
+
+set -e
+
+NAME="vc-mipi-driver-${MODULE_VERSION}"
+VERSION="${VERSION_DEB_PACKAGE}"
+PACKAGE_NAME=$NAME
+
+final_cleanup () {
+    echo "Performing final cleanup"
+    
+    # Final check and cleanup of any remaining DKMS files
+    if [ -d "/var/lib/dkms/$NAME" ]; then
+        echo "Removing any remaining DKMS directories"
+        rm -rf "/var/lib/dkms/$NAME" || true
+    fi
+    
+    # Remove any remaining source directories
+    for src_dir in /usr/src/$NAME-*; do
+        if [ -d "$src_dir" ]; then
+            echo "Removing remaining source directory: $src_dir"
+            rm -rf "$src_dir" || true
+        fi
+    done
+    
+    # Remove any remaining shared directories
+    for share_dir in /usr/share/$NAME*; do
+        if [ -d "$share_dir" ]; then
+            echo "Removing remaining shared directory: $share_dir"
+            rm -rf "$share_dir" || true
+        fi
+    done
+    
+    # Update module dependencies
+    if command -v depmod >/dev/null 2>&1; then
+        echo "Updating module dependencies"
+        depmod -a || true
+    fi
+}
+
+case "$1" in
+    remove)
+        echo "Post-removal: package removed"
+        ;;
+    purge)
+        echo "Post-removal: package purged"
+        final_cleanup
+        ;;
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        echo "Post-removal: $1"
+        ;;
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

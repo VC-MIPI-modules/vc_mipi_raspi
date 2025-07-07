@@ -2,11 +2,10 @@
 
 KERNEL_HEADERS ?= $(shell echo $(DEB_BUILD_OPTIONS) | grep -oP 'KERNEL_HEADERS=\K[^ ]+')
 
-DEST_SRC_DIR := $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-bcm2712-${VERSION_DEB_PACKAGE}
+DEST_SRC_DIR := $(CURDIR)/debian/tmp/usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}
 DEST_BOOT_DIR := $(CURDIR)/debian/tmp/boot/
-DEST_DKMS_DIR := $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-bcm2712-dkms/
+DEST_DKMS_DIR := $(CURDIR)/debian/tmp/usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms
 DEST_DKMS_VAR_DIR := $(CURDIR)/debian/tmp/var/lib/dkms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source
-
 %:
 	dh $@
 
@@ -19,14 +18,13 @@ override_dh_auto_build:
 override_dh_auto_install:
 
 	# Divert the files to prevent dpkg from making backup links
-	dpkg-divert --local --rename --add /boot/firmware/config_vc-mipi-driver-bcm2712.txt
+	dpkg-divert --local --rename --add /boot/firmware/config_vc-mipi-driver-${MODULE_VERSION}.txt
 	# Install to tmp directory with verbose output
 	
 	mkdir -p $(DEST_SRC_DIR)
 	mkdir -p $(DEST_DKMS_DIR)/overlays/
 	mkdir -p $(CURDIR)/debian/tmp/usr/local/bin/
 	mkdir -p $(DEST_BOOT_DIR)/firmware/overlays/
-	mkdir -p $(DEST_DKMS_DIR)/debian/ 
 	mkdir -p $(DEST_DKMS_VAR_DIR)
 	mkdir -p $(CURDIR)/debian/tmp/etc/udev/rules.d
 
@@ -42,9 +40,9 @@ override_dh_auto_install:
 	rm -f $(DEST_SRC_DIR)/99-camera-setup.rules
 
 
-	cp src/overlays/config_vc-mipi-driver-bcm2712.txt $(CURDIR)/debian/tmp/boot/firmware/
+	cp src/overlays/config_vc-mipi-driver-${MODULE_VERSION}.txt $(CURDIR)/debian/tmp/boot/firmware/
 
-	chmod 644 $(DEST_BOOT_DIR)/firmware/config_vc-mipi-driver-bcm2712.txt
+	chmod 644 $(DEST_BOOT_DIR)/firmware/config_vc-mipi-driver-${MODULE_VERSION}.txt
 	cp src/vc-config $(CURDIR)/debian/tmp/usr/local/bin/
 	cp src/set_rpi5_pipeline $(CURDIR)/debian/tmp/usr/local/bin/
 	chmod 755 $(CURDIR)/debian/tmp/usr/local/bin/set_rpi5_pipeline
@@ -52,8 +50,9 @@ override_dh_auto_install:
 	cp src/99-camera-setup.rules $(CURDIR)/debian/tmp/etc/udev/rules.d/
 	chmod 755 $(CURDIR)/debian/tmp/etc/udev/rules.d/99-camera-setup.rules
 
-	cp debian/postinst $(DEST_DKMS_DIR)/debian/ 
-	chmod 755 $(DEST_DKMS_DIR)/debian/postinst
+	cp debian/postinst $(DEST_DKMS_VAR_DIR)/post_install 
+	chmod +x $(DEST_DKMS_VAR_DIR)/post_install
+
 
 	chmod -R 644 $(DEST_BOOT_DIR)/firmware/overlays/
 	
@@ -61,7 +60,7 @@ override_dh_auto_install:
 	dh_install --sourcedir=$(CURDIR)/debian/tmp --verbose 
 
 	# Undivert the files after installation
-	dpkg-divert --local --rename --remove /boot/firmware/config_vc-mipi-driver-bcm2712.txt
+	dpkg-divert --local --rename --remove /boot/firmware/config_vc-mipi-driver-${MODULE_VERSION}.txt
 
 override_dh_missing:
 	dh_missing --fail-missing

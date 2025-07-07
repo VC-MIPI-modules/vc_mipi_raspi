@@ -1,0 +1,99 @@
+#!/bin/sh
+# Copyright (C) Vision Components
+# Pre-removal script for vc-mipi-driver-${MODULE_VERSION}
+
+set -e
+
+NAME="vc-mipi-driver-${MODULE_VERSION}"
+VERSION="${VERSION_DEB_PACKAGE}"
+PACKAGE_NAME=$NAME
+
+dkms_cleanup () {
+    echo "Cleaning up DKMS modules for $NAME"
+    
+    # Check if DKMS module exists before trying to remove it
+    if dkms status "$NAME/$VERSION" >/dev/null 2>&1; then
+        echo "Removing DKMS module $NAME/$VERSION"
+        dkms remove "$NAME/$VERSION" --all || true
+    fi
+    
+    # Clean up any leftover DKMS directories
+    if [ -d "/var/lib/dkms/$NAME" ]; then
+        echo "Removing leftover DKMS directories"
+        rm -rf "/var/lib/dkms/$NAME" || true
+    fi
+    
+    # Clean up source directories
+    if [ -d "/usr/src/$NAME-$VERSION" ]; then
+        echo "Removing source directories"
+        rm -rf "/usr/src/$NAME-$VERSION" || true
+    fi
+    
+    # Clean up shared directories
+    if [ -d "/usr/share/$NAME-dkms" ]; then
+        echo "Removing shared directories"
+        rm -rf "/usr/share/$NAME-dkms" || true
+    fi
+}
+
+remove_config () {
+    echo "Removing configuration files"
+    
+    # Remove the include line from config.txt
+    CONFIG_FILE="/boot/firmware/config.txt"
+    if [ -f "$CONFIG_FILE" ]; then
+        # Create backup
+        cp "$CONFIG_FILE" "${CONFIG_FILE}.bak-$(date +%Y%m%d-%H%M%S)" || true
+        
+        # Remove the include line
+        sed -i '/^include config_vc-mipi-driver-${MODULE_VERSION}.txt$/d' "$CONFIG_FILE" || true
+        echo "Removed include line from $CONFIG_FILE"
+    fi
+    
+    # Remove overlay files
+    if [ -f "/boot/firmware/config_vc-mipi-driver-${MODULE_VERSION}.txt" ]; then
+        rm -f "/boot/firmware/config_vc-mipi-driver-${MODULE_VERSION}.txt" || true
+        echo "Removed config_vc-mipi-driver-${MODULE_VERSION}.txt"
+    fi
+    
+    if [ -d "/boot/firmware/overlays" ]; then
+        rm -f /boot/firmware/overlays/*vc-mipi* || true
+        echo "Removed overlay files"
+    fi
+    
+    # Remove udev rules
+    if [ -f "/etc/udev/rules.d/99-camera-setup.rules" ]; then
+        rm -f "/etc/udev/rules.d/99-camera-setup.rules" || true
+        echo "Removed udev rules"
+    fi
+}
+
+case "$1" in
+    remove|upgrade|deconfigure)
+        echo "Pre-removal: $1"
+        dkms_cleanup
+        ;;
+    purge)
+        echo "Purging package"
+        dkms_cleanup
+        remove_config
+        ;;
+    failed-upgrade)
+        echo "Failed upgrade, cleaning up"
+        dkms_cleanup
+        ;;
+    *)
+        echo "prerm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+# Reload udev rules if we're removing config
+if [ "$1" = "purge" ] || [ "$1" = "remove" ]; then
+    if command -v udevadm >/dev/null 2>&1; then
+        udevadm control --reload-rules || true
+        udevadm trigger || true
+    fi
+fi
+
+exit 0

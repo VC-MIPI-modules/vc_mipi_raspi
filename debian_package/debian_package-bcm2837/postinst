@@ -5,6 +5,7 @@
 # Copyright (C) 2009 Alberto Milone
 
 set -e
+export DKMS_VERBOSE=1
 TEST=0
 NAME="vc-mipi-driver-${MODULE_VERSION}"
 VERSION="$VERSION_DEB_PACKAGE"
@@ -14,13 +15,30 @@ CVERSION=`dpkg-query -W -f='${VERSION}' $DEB_NAME | awk -F "-" '{print $1}' | cu
 ARCH=`dpkg --print-architecture`
 
 dkms_configure () {
-    echo "DEBUG: NAME is $NAME"
+
+    # Clean up any broken state before attempting installation
+    if dkms status "$NAME/$VERSION" >/dev/null 2>&1; then
+        echo "Found existing DKMS module, cleaning up first"
+        dkms remove "$NAME/$VERSION" --all || true
+    fi
 
     for POSTINST in /usr/lib/dkms/common.postinst "/usr/share/$PACKAGE_NAME/debian/postinst"; do
         if [ -f "$POSTINST" ]; then
             echo "Running $POSTINST ${NAME} ${VERSION} /usr/share/$PACKAGE_NAME $ARCH $2"
-            "$POSTINST" "${NAME}" "${VERSION}" "/usr/share/$PACKAGE_NAME" "$ARCH" "$2"
-            return $?
+            if "$POSTINST" "${NAME}" "${VERSION}" "/usr/share/$PACKAGE_NAME" "$ARCH" "$2"; then
+                return 0
+            else
+                echo "ERROR: DKMS installation failed, attempting cleanup and retry"
+                # Clean up and try once more
+                dkms remove "$NAME/$VERSION" --all 2>/dev/null || true
+                rm -rf "/var/lib/dkms/$NAME" 2>/dev/null || true
+                if "$POSTINST" "${NAME}" "${VERSION}" "/usr/share/$PACKAGE_NAME" "$ARCH" "$2"; then
+                    return 0
+                else
+                    echo "ERROR: DKMS installation failed after retry"
+                    return 1
+                fi
+            fi
         fi
         echo "WARNING: $POSTINST does not exist." >&2
     done
