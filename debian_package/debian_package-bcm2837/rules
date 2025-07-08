@@ -48,10 +48,8 @@ override_dh_auto_install:
 	cp src/99-camera-setup.rules $(CURDIR)/debian/tmp/etc/udev/rules.d/
 	chmod 755 $(CURDIR)/debian/tmp/etc/udev/rules.d/99-camera-setup.rules
 
-	cp debian/postinst $(DEST_DKMS_DIR)/debian/ 
-	chmod 755 $(DEST_DKMS_DIR)/debian/postinst
-	cp src/set_rpi3_pipeline $(CURDIR)/debian/tmp/usr/local/bin/
-	chmod 755 $(CURDIR)/debian/tmp/usr/local/bin/set_rpi3_pipeline
+	cp debian/postinst $(DEST_DKMS_VAR_DIR)/post_install 
+	chmod +x $(DEST_DKMS_VAR_DIR)/post_install
 	chmod -R 644 $(DEST_BOOT_DIR)/firmware/overlays/
 	
 	# Ensure the file is copied before running dh_install

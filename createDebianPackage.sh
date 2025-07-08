@@ -2,7 +2,7 @@
 sudo rm -rf build
 mkdir -p build
 
-modules=("bcm2712")
+modules=("bcm2712" "bcm2711" "bcm2837" "vccmi10")
 
 
 # Set version if not set

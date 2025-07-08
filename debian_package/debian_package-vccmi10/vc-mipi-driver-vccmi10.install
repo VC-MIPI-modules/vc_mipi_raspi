@@ -1,12 +1,10 @@
-var/usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/Makefile usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/overlays/
-
-usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/*.dtbo  usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/kms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source/dkms.conf var/lib/dkms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source/
+var/lib/dkms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source/* var/lib/dkms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source/
+var/lib/dkms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source/post_install var/lib/dkms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source/
 
 usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/dkms.conf usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/
 usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/Makefile usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/
 usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/*.txt usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/overlays/
-
-usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/debian/postinst usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/debian/
+usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/Makefile usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/overlays/
 
 usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/*.dtbo  usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/
 usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/Makefile  usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/
