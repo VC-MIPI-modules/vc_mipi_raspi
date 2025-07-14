@@ -1,12 +1,10 @@
 # Raspberry Pi 5 Driver for VC MIPI
-This driver package is supporting the official Raspberry Pi 5. 
+This driver package is supporting the official Raspberry Pi 3+, 4 and 5 models and CM. 
 Downloads are available under 
 
 [Releases](https://github.com/VC-MIPI-modules/vc_mipi_raspi/releases)
 
-For Raspberry Pi 3 and 4 modules and compute modules, please use this driver installation
-
-[Raspi3 and 4 Driver](https://www.mipi-modules.com/fileadmin/external/documentation/hardware/VC_MIPI_Raspberry_PI/index.html)
+For mechanical installation see [Mechanical installation manual](./docs/electrical_setup.md)
 
 # Installation
 The driver is tested on 64-bit Raspberry Pi OS with Bookworm (Lite or with desktop).
@@ -14,15 +12,22 @@ The OS can be installed by the official Raspberry Pi Imager from the Raspberry P
 
 [Raspberry Pi OS](https://www.raspberrypi.com/software/)
 
+Copy the debian package for your target system to the module:
+* BCM2712 ⇒ Raspi5, CM5
+* BCM2711 ⇒ Raspi4, CM4
+* BCM2837 ⇒ Raspi3+, Raspi Zero 2
+* VCCMI10 ⇒ [VC MIPI Compute Module Interface Board](https://www.mipi-modules.com/fileadmin/external/documentation/hardware/VC_MIPI_Compute_Module_Interface/index.html)
+
+
 Run the installation with the installation of the needed packages: 
 ```
-sudo apt install ./vc-mipi-driver-bcm2712_0.3.1_arm64.deb
+sudo apt install ./vc-mipi-driver-bcm2712_xxx_arm64.deb
 ```
 <b>or</b>
 Run the installation with manual packages:
 ```
 sudo apt install dkms linux-headers-generic v4l-utils whiptail
-sudo dpkg -i ./vc-mipi-driver-bcm2712_0.3.1_arm64.deb
+sudo dpkg -i ./vc-mipi-driver-bcm2712_xxx_arm64.deb
 ```
 After a reboot the connected sensor(s) should be detected and visible as v4l2 capture devices
 Under the current Raspberry Pi OS with Bookworm, 
@@ -34,23 +39,9 @@ the sensors are:
 | Cam1     | /dev/video8 | /dev/v4l-subdev5 |
 
 
-# Building the Debian package
+# Build from source
 
-Running dpkg-buildpackage by script creates a Debian package
-
-If different Linux headers are used, 
-the path can be specified by the environmental variable ```KERNEL_HEADERS```
-I.e. if the Linux kernel is built from sources, 
-the path is set by ```KERNEL_HEADERS=/path/to/linux-gitrepo```
-
-## Requirements
-```
-sudo apt-get install debhelper-compat  dkms dh-dkms debhelper  linux-headers-generic
-```
-## Script
-```
-bash createDebianPackage.sh
-```
+See [Build from Source](./docs/build_from_source.md)
 
 # Configuration on Raspberry Pi 5
 
