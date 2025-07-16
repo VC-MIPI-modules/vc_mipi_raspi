@@ -4,7 +4,7 @@ Downloads are available under
 
 [Releases](https://github.com/VC-MIPI-modules/vc_mipi_raspi/releases)
 
-For mechanical installation see [Mechanical installation manual](./docs/electrical_setup.md)
+For mechanical installation see [Mechanical installation manual](./docs/mechanical_setup.md)
 
 # Installation
 The driver is tested on 64-bit Raspberry Pi OS with Bookworm (Lite or with desktop).
