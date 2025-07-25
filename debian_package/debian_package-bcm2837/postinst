@@ -101,8 +101,20 @@ case "$1" in
     ;;
 esac
 
+# Skip if running in a container/chroot or not on Raspberry Pi hardware
+if grep -qa 'container\|chroot' /proc/1/cgroup 2>/dev/null; then
+    echo "Detected container or chroot, skipping postinst actions."
+    exit 0
+fi
+
+if [ ! -f /proc/device-tree/model ] || ! grep -q "Raspberry Pi" /proc/device-tree/model; then
+    echo "Not running on Raspberry Pi hardware, skipping postinst actions."
+    exit 0
+fi
+
 udevadm control --reload-rules
 udevadm trigger
 #DEBHELPER#
 
 exit 0
+
