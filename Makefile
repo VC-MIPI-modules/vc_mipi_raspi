@@ -48,12 +48,28 @@ installRPICamApps:
 	cd /tmp && rm -rf /tmp/rpicam-apps && \
 	git clone https://github.com/raspberrypi/rpicam-apps.git && \
 	cd rpicam-apps && \
-	git checkout v1.6.0 && \
 	meson setup build  --buildtype=release --prefix=/usr && \
 	meson compile -C build && \
 	sudo meson install -C build
 	@printf "%s\n" \
 	 "/usr/local/lib/aarch64-linux-gnu" \
 	 "/usr/lib/aarch64-linux-gnu" \
-	| sudo tee /etc/ld.so.conf.d/rpicam.conf	sudo ldconfig
+	| sudo tee /etc/ld.so.conf.d/rpicam.conf	&& \
+	sudo ldconfig
 
+installRPICamAppsHailo:
+	sudo apt install hailo-tappas-core=3.30.0-1 hailo-dkms=4.19.0-1 hailort=4.19.0-3
+	cd /tmp && rm -rf /tmp/rpicam-apps && \
+	git clone https://github.com/raspberrypi/rpicam-apps.git && \
+	cd rpicam-apps && \
+	git fetch --tags && \
+	git checkout v1.5.2 && \
+	meson setup build  --buildtype=release -Denable_hailo=enabled -Denable_opencv=enabled -Ddownload_hailo_models=true -Denable_egl=enabled -Denable_imx500=false && \
+	meson compile -C build && \
+	sudo meson install -C build 
+	@printf "%s\n" \
+	 "/usr/local/lib/aarch64-linux-gnu" \
+	 "/usr/lib/aarch64-linux-gnu" \
+	| sudo tee /etc/ld.so.conf.d/rpicam.conf	&& \
+	sudo ldconfig
+	sudo cp -r /usr/local/share/hailo-models /usr/share/
