@@ -1,4 +1,4 @@
-# Raspberry Pi 5 Driver for VC MIPI
+# Raspberry Pi Driver for VC MIPI
 This driver package is supporting the official Raspberry Pi 3+, 4 and 5 models and CM. 
 Downloads are available under 
 
@@ -43,7 +43,7 @@ the sensors are:
 
 See [Build from Source](./docs/build_from_source.md)
 
-# Configuration on Raspberry Pi 5
+# Configuration
 
 1. The configuration for the VC MIPI Sensors is in the boot file 
 <i>/boot/firmware/config_vc-mipi-driver-bcm2712.txt</i>. 
@@ -58,7 +58,7 @@ it is possible to change the values of the controls and also the region of inter
 ![Lanes configuration](./docs/images/whiptail_lanes_config.png "Lanes configuration")
 ![Format Selection](./docs/images/whiptail_format_settings.png "Format settings")
 
-# ISP and Libcamera Support
+# ISP and Libcamera Support (Raspberry Pi 5 Series only)
 For Libcamera support, refer to [Libcamera Installation](./docs/libcamera.md)
 Then the ISP with features like Auto White Balancing (AWB) are supported.
 
