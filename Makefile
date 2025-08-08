@@ -78,7 +78,7 @@ installRPICamApps:
 	sudo ldconfig
 
 installRPICamAppsHailo:
-	sudo apt install hailo-tappas-core=3.30.0-1 hailo-dkms=4.19.0-1 hailort=4.19.0-3
+	sudo apt install hailo-tappas-core=3.30.0-1 hailo-dkms=4.19.0-1 hailort=4.19.0-3 libepoxy-dev
 	cd /tmp && rm -rf /tmp/rpicam-apps && \
 	git clone https://github.com/raspberrypi/rpicam-apps.git && \
 	cd rpicam-apps && \
