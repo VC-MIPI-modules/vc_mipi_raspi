@@ -3,7 +3,15 @@
 # Find all media devices and check for video0
 frontend_device="unicam-image"
 
-
+is_vc_mipi_camera() {
+    local subdev="$1"   # z.B. /dev/v4l-subdev0
+    if [ -f "/sys/class/video4linux/$(basename "$subdev")/name" ] && \
+       grep -qi "vc[_-]mipi[_-]camera" "/sys/class/video4linux/$(basename "$subdev")/name"; then
+        return 0  # true
+    else
+        return 1  # false
+    fi
+}
 map_mediabus_to_fourcc() {
     local mediabus_code=$1
     local mediabusfmt=""
@@ -156,18 +164,37 @@ configure_video_device() {
         fi
     done
 }
-# Check if arguments are provided
-if [ "$#" -lt 2 ]; then
+# If only subdev is provided, search for related video device
+if [ "$#" -eq 1 ]; then
+    subdev=$1
+    [[ "$subdev" != /dev/* ]] && subdev="/dev/$subdev"
+
+    if  is_vc_mipi_camera "$subdev"; then
+                echo "Device ($subdev) is a vc_mipi_camera" 
+            else
+                echo "Device ($subdev) is not a vc_mipi_camera "
+                exit 0                
+    fi
+
+    for mediadev in /dev/media*; do
+        if media-ctl -d "$mediadev" -p | grep -q "$1"; then
+            echo "Found media device: $mediadev"    
+            dev=$(media-ctl -d "$mediadev" -p | grep "$frontend_device" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
+            configure_video_device "$subdev" "$dev" 
+        fi
+    done
+
+# Scan for all media devices if no arguments are provided
+elif [ "$#" -eq 0 ]; then
    
     for mediadev in /dev/media*; do
         if media-ctl -d "$mediadev" -p | grep -q "vc_mipi_camera"; then
             subdev=$(media-ctl -d "$mediadev" -p | grep "vc_mipi_camera" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
             dev=$(media-ctl -d "$mediadev" -p | grep "$frontend_device" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
-
             configure_video_device "$subdev" "$dev" 
         fi
     done
     exit 0
+else
+    configure_video_device "$1" "$2" 
 fi
-
-configure_video_device "$1" "$2" 
