@@ -273,7 +273,7 @@ configure_video_device() {
             
             v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb
             echo "v4l2-ctl -d $videodev --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb"
-            #read a
+            
             if ! timeout 5 v4l2-ctl --verbose --stream-mmap --device=$videodev --stream-count=3; then
                 echo "No image recorded for $videodev" | sudo tee /dev/kmsg
             fi
@@ -330,7 +330,7 @@ set_cropping()
 
             mediabusfmt=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15- | xargs echo -n)
 
-            #read a
+            
             entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
             echo media-ctl -d "$mediadev" -p | grep -B 3 "$subdev"
             echo "Code: $fmt"
@@ -396,7 +396,7 @@ set_roi() {
           
             mediabusfmt=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15- | xargs echo -n)
             format="$mediabusfmt/$resolution"
-            #read a
+            
             entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
             echo media-ctl -d "$mediadev" -p | grep -B 3 "$subdev"
             echo "Code: $fmt"
