@@ -240,10 +240,8 @@ get_cropping() {
     local subdev=$1
     local mediadev
     mediadev=$(get_mediadevice "$subdev")
-    echo "Using media device: $mediadev" >&2
     local entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
     local cropping_line=$(media-ctl -d "$mediadev" -p | grep -A 6 "$entity_name" | grep crop: | awk -F ':' '{ print $2 }' | awk -F ' ' '{print $1}')
-    echo "$cropping_line" >&2
     local left=$(echo "$cropping_line" | awk -F '[(),]' '{print $2}')
     local top=$(echo "$cropping_line" | awk -F '[(),]' '{print $3}')
     local width=$(echo "$cropping_line" | awk -F '[x/]' '{print $2}')
@@ -280,9 +278,7 @@ configure_video_device() {
             mediabus_code=$(get_mediabus_code $subdev )
 
             # Print the mediabus code
-            echo "Mediabus code of subdevice $subdev: '$mediabus_code'"
             fmt=$(map_mediabus_to_fourcc $mediabus_code)
-            echo "Format of subdevice $subdev: $fmt"
 
             resolution=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
             width=$(echo $resolution | awk -F 'x' '{ print $1 }')
@@ -290,13 +286,10 @@ configure_video_device() {
             mediabusfmt=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15- | xargs echo -n)
             format="$mediabusfmt/$resolution"
 
-            echo "Code: $fmt"
-            echo "media-ctl -d "$mediadev" -V ''\''csi2'\'':4 [fmt:'"$format"' field:none colorspace:srgb]'" 
             media-ctl -d "$mediadev" -V ''\''csi2'\'':4 [fmt:'"$format"' field:none colorspace:srgb]' 
             media-ctl -d "$mediadev" -V ''\''csi2'\'':0 [fmt:'"$format"' field:none colorspace:srgb]' 
             media-ctl -d "$mediadev" -l ''\''csi2'\'':4 -> '\''rp1-cfe-csi2_ch0'\'':0 [1]' 
             v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat="$fmt",colorspace=srgb 
-            #read a
             if ! timeout 5 v4l2-ctl --verbose --stream-mmap --device=$videodev --stream-count=3; then
                 echo "No image recorded for $videodev" | sudo tee /dev/kmsg
             fi
@@ -325,7 +318,6 @@ set_roi() {
 
         
     for mediadev in /dev/media*; do
-        echo "Checking $mediadev..."
         
         # Skip if not a valid media device
         if ! [ -e "$mediadev" ]; then
@@ -339,28 +331,20 @@ set_roi() {
         if media-ctl -d "$mediadev" -p | grep -q "$videodev"; then
             echo "Found $videodev on $mediadev"
             
-            # Your existing script logic here
         
             media-ctl -d "$mediadev" 
 
             mediabus_code=$(get_mediabus_code $subdev )
 
-            # Print the mediabus code
-            echo "Mediabus code of subdevice $subdev: '$mediabus_code'"
             fmt=$(map_mediabus_to_fourcc $mediabus_code)
-            echo "Format of subdevice $subdev: $fmt"
 
             resolution=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
           
             mediabusfmt=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15- | xargs echo -n)
             format="$mediabusfmt/$resolution"
-            #read a
             entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
-            echo media-ctl -d "$mediadev" -p | grep -B 3 "$subdev"
-            echo "Code: $fmt"
             media-ctl -d "$mediadev" -l ''\''csi2'\'':4 -> '\''rp1-cfe-csi2_ch0'\'':0 [1]' 
             
-            echo "media-ctl -d $mediadev -V \"'$entity_name':0 [fmt:$mediabusfmt/${width}x${height} field:none colorspace:srgb]\"" 
             media-ctl -d $mediadev -V "'$entity_name':0 [fmt:$mediabusfmt/${width}x${height} field:none colorspace:srgb]" 
             v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb 
 
@@ -402,30 +386,22 @@ set_cropping()
             continue
         fi
         
-        # Get media device number
         media_num=$(echo "$mediadev" | grep -o '[0-9]*$')
         
         # Check if this media device has video0
         if media-ctl -d "$mediadev" -p | grep -q "$videodev"; then
             echo "Found $videodev on $mediadev"
             
-            # Your existing script logic here
-        
+       
             media-ctl -d "$mediadev" 
 
             mediabus_code=$(get_mediabus_code $subdev )
 
-            # Print the mediabus code
-            echo "Mediabus code of subdevice $subdev: '$mediabus_code'"
             fmt=$(map_mediabus_to_fourcc $mediabus_code)
 
             mediabusfmt=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15- | xargs echo -n)
 
-            #read a
             entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
-            echo media-ctl -d "$mediadev" -p | grep -B 3 "$subdev"
-            echo "Code: $fmt"
-            echo "media-ctl -d $mediadev --set-v4l2 \"'$entity_name':0[crop:(${left},${top})/${width}x${height}]\""
             media-ctl -d $mediadev --set-v4l2 "'$entity_name':0[crop:(${left},${top})/${width}x${height}]" 
             media-ctl -d $mediadev -V "'csi2':0 [fmt:$mediabusfmt/${width}x${height} field:none colorspace:srgb]" 
 
@@ -456,35 +432,23 @@ set_format() {
             continue
         fi
         
-        # Get media device number
         media_num=$(echo "$mediadev" | grep -o '[0-9]*$')
         
         # Check if this media device has video0
         if media-ctl -d "$mediadev" -p | grep -q "$videodev"; then
             echo "Found $videodev on $mediadev"
             
-            # Your existing script logic here
             subdev=$(media-ctl -d "$mediadev" -p | grep "vc_mipi_camera" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
 
-            media-ctl -d "$mediadev" -r
-
-
-            # Print the mediabus code
-            echo "Mediabus code of subdevice $subdev: '$mediabus_code'"
-            echo "Format of subdevice $subdev: $fmt"
+            media-ctl -d "$mediadev" -r          
 
             entity_name=$(get_entity_name $mediadev)
-            echo "Entity name: $entity_name"
-
-
 
             resolution=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
             width=$(echo $resolution | awk -F 'x' '{ print $1 }')
             height=$(echo $resolution | awk -F 'x' '{ print $2 }')
             format="$mediabusfmt/$resolution"
-            #read a
-            #
-            echo "media-ctl -d "$mediadev" -V ''\''csi2'\'':4 [fmt:'"$format"' field:none colorspace:srgb]'" 
+            
             media-ctl -d "$mediadev" -r
             media-ctl -d "$mediadev" -V ''\''vc_mipi_camera '$entity_name''\'':0 [fmt:'"$format"' field:none colorspace:srgb]'
 
@@ -505,7 +469,6 @@ set_format() {
 
 
             media-ctl -d "$mediadev" -l ''\''csi2'\'':4 -> '\''rp1-cfe-csi2_ch0'\'':0 [1]' 
-            #read a
             mediabus_code=$(get_mediabus_code $subdev )
             fmt=$(map_mediabus_to_fourcc $mediabus_code)
 
@@ -541,33 +504,32 @@ set_format_unpacked() {
         if media-ctl -d "$mediadev" -p | grep -q "$videodev"; then
             echo "Found $videodev on $mediadev"
             
-            # Your existing script logic here
             subdev=$(media-ctl -d "$mediadev" -p | grep "vc_mipi_camera" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
 
             media-ctl -d "$mediadev" -r
 
 
-            # Print the mediabus code
-            echo "Mediabus code of subdevice $subdev: '$mediabus_code'"
-            echo "Format of subdevice $subdev: $fmt"
-
             entity_name=$(get_entity_name $mediadev)
-            echo "Entity name: $entity_name"
-
-
 
             resolution=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
             width=$(echo $resolution | awk -F 'x' '{ print $1 }')
             height=$(echo $resolution | awk -F 'x' '{ print $2 }')
             format="$mediabusfmt/$resolution"
-            #read a
-            #
-            echo "media-ctl -d "$mediadev" -V ''\''csi2'\'':4 [fmt:'"$format"' field:none colorspace:srgb]'" 
             media-ctl -d "$mediadev" -r
             media-ctl -d "$mediadev" -V ''\''vc_mipi_camera '$entity_name''\'':0 [fmt:'"$format"' field:none colorspace:srgb]'
 
             new_format=$(get_format_entity $subdev)
-            new_format_cfe="SRGGB16_1X16/"$width"x"$height""
+            
+            # Determine the correct CFE format based on the mediabus format
+            if [[ "$mediabusfmt" == *"Y1"* ]]; then
+                cfe_fmt="Y16_1X16"
+            elif [[ "$mediabusfmt" == *"SGBRG"* ]]; then
+                cfe_fmt="SGBRG16_1X16"
+            else
+                cfe_fmt="SRGGB16_1X16"  # Default fallback
+            fi
+            
+            new_format_cfe="$cfe_fmt/"$width"x"$height""
             echo "New format: '$new_format' '$new_format_cfe'"
             if([ "$new_format" != "$format" ]); then
                 echo "Failed to set format to $mediabusfmt"
@@ -584,7 +546,6 @@ set_format_unpacked() {
 
 
             media-ctl -d "$mediadev" -l ''\''csi2'\'':4 -> '\''rp1-cfe-csi2_ch0'\'':0 [1]' 
-            #read a
             mediabus_code=$(get_mediabus_code $subdev )
             fmt=$(map_mediabus_to_related_unpacked_fourcc $mediabus_code)
 
@@ -610,7 +571,6 @@ dialog_set_roi()
     cur_width=$(echo $resolution | awk -F 'x' '{ print $1 }')
     cur_height=$(echo $resolution | awk -F 'x' '{ print $2 }')
 
-    # Use whiptail to prompt the user to enter width and height
     width=$(whiptail --inputbox "Enter the desired width:" 8 40 $cur_width 3>&1 1>&2 2>&3)
     if [ $? -ne 0 ]; then
         break
@@ -633,7 +593,6 @@ dialog_set_cropping()
     read cur_left cur_top cur_width cur_height <<< $(get_cropping "$subdev")
 
 
-    # Use whiptail to prompt the user to enter width and height
     width=$(whiptail --inputbox "Enter the desired width:" 8 40 $cur_width 3>&1 1>&2 2>&3)
     if [ $? -ne 0 ]; then
         return
@@ -660,7 +619,6 @@ dialog_set_debuglevel()
 
     echo "Current debug level: $currentlevel"
 
-    # Use whiptail to prompt the user to enter debug level
     debuglevel=$(whiptail --menu "At least Logging level:" 15 200 6  --default-item "$currentlevel" \
      "1" "Errors" \
      "2" "Warnings" \
@@ -819,17 +777,12 @@ dialog_set_format()
         ["RGGB14"]="RGGB14P"
     )
     declare -A already_in
-    echo "Reverse format map: ${!reverse_format_map[@]}" >&2
-    echo "Reverse format map values: ${reverse_format_map[*]}" >&2
     for fmt in "${supported_full[@]}"; do
-        echo "Processing format: $fmt" >&2
         short="${reverse_format_map[$fmt]:-}"
         supported_with_packed+=("$short")
 
-        echo "Short format: $short" >&2
         if [[ -n "${packed_map[$short]:-}" ]] && [[ -z "${already_in[${packed_map[$short]}]:-}" ]]; then
             supported_with_packed+=("${packed_map[$short]}")
-            echo "Adding packed format: ${packed_map[$short]}" >&2
             already_in["${packed_map[$short]}"]=1
         fi
 
@@ -879,18 +832,16 @@ dialog_set_format()
         dialog_set_format "$videodev"
         return
     fi
-    # Lookup the full mediabus format code
+
     full_mediabusfmt=${format_map[$mediabusfmt]}
     echo "Selected format: $full_mediabusfmt"   
 
-    # If the format is as key in packed_format, there is a special case
 
     if [[ -n "$mediabusfmt" && -v packed_map[$mediabusfmt] ]]; then
-        echo "Selected format {$mediabusfmt} is not packed, no special handling needed." >&2
-        set_format_unpacked "$videodev" "$full_mediabusfmt"
-    else
+        echo "Selected format {$mediabusfmt} is unpacked, output set to unpacked with 16 bits." >&2
         set_format "$videodev" "$full_mediabusfmt"
-        # Here you can add any special handling for packed formats if needed
+    else
+        set_format_unpacked "$videodev" "$full_mediabusfmt"
     fi
 
 
