@@ -90,7 +90,7 @@ build_format_maps() {
 }
 
 # Prefer per-device config; fall back to global
-get_preferred_format_short_for_dev() {
+get_preferred_pixelformat_subdev() {
     local subdev=$1
     local mediadev=$2
 
@@ -105,20 +105,61 @@ get_preferred_format_short_for_dev() {
         # shellcheck disable=SC1090
         . "$cfg_dev"
         if [ -n "$preferred_format_short" ]; then
-            echo "$preferred_format_short"
+            # Use printf to preserve trailing spaces
+            printf '%s' "$preferred_format_short"
+            return 0
+        fi
+    fi   
+    return 1
+}
+
+# Get preferred format short code for device
+get_preferred_pixelformat_subdev() {
+    local subdev=$1
+    local mediadev=$2
+
+    # Find the entity name that owns this subdev (two first tokens of entity line)
+    local entity_name
+    entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
+    local sanitized
+    sanitized=$(sanitize_entity_name "$entity_name")
+
+    local cfg_dev="/etc/vc-mipi/formats.d/${sanitized}.conf"
+    if [ -f "$cfg_dev" ]; then
+        # shellcheck disable=SC1090
+        . "$cfg_dev"
+        if [ -n "$preferred_pixelformat_subdev" ]; then
+            # Use printf to preserve trailing spaces
+            printf '%s' "$preferred_pixelformat_subdev"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+
+# Get preferred pixelformat for device
+get_preferred_pixelformat_videodev() {
+    local subdev=$1
+    local mediadev=$2
+
+    # Find the entity name that owns this subdev (two first tokens of entity line)
+    local entity_name
+    entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
+    local sanitized
+    sanitized=$(sanitize_entity_name "$entity_name")
+
+    local cfg_dev="/etc/vc-mipi/formats.d/${sanitized}.conf"
+    if [ -f "$cfg_dev" ]; then
+        # shellcheck disable=SC1090
+        . "$cfg_dev"
+        if [ -n "$preferred_pixelformat_videodev" ]; then
+            # Use printf to preserve trailing spaces
+            printf '%s' "$preferred_pixelformat_videodev"
             return 0
         fi
     fi
 
-    local cfg_glob="/etc/vc-mipi/format.conf"
-    if [ -f "$cfg_glob" ]; then
-        # shellcheck disable=SC1090
-        . "$cfg_glob"
-        if [ -n "$preferred_format_short" ]; then
-            echo "$preferred_format_short"
-            return 0
-        fi
-    fi
     return 1
 }
 
@@ -144,7 +185,7 @@ apply_preferred_format_if_supported() {
     done
 
     local preferred
-    preferred=$(get_preferred_format_short_for_dev "$subdev" "$mediadev") || return 0
+    preferred=$(get_preferred_pixelformat_subdev "$subdev" "$mediadev") || return 0
 
     # Check membership
     local found=0
@@ -280,6 +321,65 @@ map_mediabus_to_fourcc() {
     echo "$mediabusfmt"
 
 }
+
+map_mediabus_to_related_unpacked_fourcc() {
+    local mediabus_code=$1
+    local mediabusfmt=""
+    case $mediabus_code in
+        "0x300e")
+            mediabusfmt="GB16" #MEDIA_BUS_FMT_SGBRG10_1X10
+            ;;
+        "0x300f")
+            mediabusfmt="RG16" #MEDIA_BUS_FMT_SRGGB10_1X10
+            ;;
+        "0x200a")
+            mediabusfmt="Y10 " #MEDIA_BUS_FMT_Y10_1X10 
+            ;;
+        "0x300a")
+            mediabusfmt="GR12" #MEDIA_BUS_FMT_SGRBG10_1X10
+            ;;
+        "0x3007") 
+            mediabusfmt="BG12" #MEDIA_BUS_FMT_SBGGR10_1X10
+            ;;
+        "0x3008")
+            mediabusfmt="BG12" #MEDIA_BUS_FMT_SBGGR12_1X12
+            ;;
+        "0x3010")
+            mediabusfmt="GB12" #MEDIA_BUS_FMT_SGBRG12_1X12 
+            ;;
+        "0x3011")
+            mediabusfmt="GR12" #MEDIA_BUS_FMT_SGRBG12_1X12
+            ;;
+        "0x3012")
+            mediabusfmt="RG12" #MEDIA_BUS_FMT_SRGGB12_1X12
+            ;;
+        "0x2013")
+            mediabusfmt="Y12 " #MEDIA_BUS_FMT_Y12_1X12
+            ;;       
+        "0x3019")
+            mediabusfmt="BG14" #MEDIA_BUS_FMT_SBGGR14_1X14
+            ;;
+        "0x301a")
+            mediabusfmt="GB14" #MEDIA_BUS_FMT_SGBRG14_1X14
+            ;;
+        "0x301b")
+            mediabusfmt="GR14" #MEDIA_BUS_FMT_SGRBG14_1X14
+            ;;
+        "0x301c")
+            mediabusfmt="RG14" #MEDIA_BUS_FMT_SRGGB14_1X14
+            ;;
+        "0x202d")
+            mediabusfmt="Y14 " #MEDIA_BUS_FMT_Y14_1X14
+            ;;       
+        *)
+            echo "Unknown mediabus code: $mediabus_code"
+            exit 1
+            ;;
+    esac
+    echo "$mediabusfmt"
+
+}
+
 get_mediabus_code() {
     local subdev=$1
 
@@ -315,8 +415,16 @@ configure_video_device() {
 
             mediabus_code=$(get_mediabus_code $subdev )
 
-            # Print the mediabus code
-            fmt=$(map_mediabus_to_fourcc $mediabus_code)
+            # Check if there's a preferred pixelformat configured, otherwise use the default mapping
+            preferred_pixelformat_videodev=$(get_preferred_pixelformat_videodev "$subdev" "$mediadev")
+            if [ -n "$preferred_pixelformat_videodev" ]; then
+                fmt="$preferred_pixelformat_videodev"
+                echo "Using preferred pixelformat: '$fmt'"
+            else
+                # Print the mediabus code
+                fmt=$(map_mediabus_to_fourcc $mediabus_code)
+                echo "Using default pixelformat mapping: '$fmt'"
+            fi
 
             resolution=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
             width=$(echo $resolution | awk -F 'x' '{ print $1 }')
@@ -327,7 +435,7 @@ configure_video_device() {
             entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
             media-ctl -d "$mediadev" -l ''\'"$entity_name"\'':0 -> '\''unicam-image'\'':0 [1]' 
             
-            v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb
+            v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat="$fmt",colorspace=srgb
             
             if ! timeout 5 v4l2-ctl --verbose --stream-mmap --device=$videodev --stream-count=3; then
                 echo "No image recorded for $videodev" | sudo tee /dev/kmsg

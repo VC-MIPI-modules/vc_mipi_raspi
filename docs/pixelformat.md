@@ -26,6 +26,24 @@ After conversion: 1023 << 6 = 65472
 
 You can change the pixel format using the `vc-config` utility. This tool configures the media pads to select the desired format, allowing you to work with either packed or unpacked data as needed.
 
+### Persistent Format Configuration
+
+Starting with recent versions, the `vc-config` utility supports saving your preferred pixel format configuration that will be automatically applied at boot time. When you select a format in `vc-config`, you'll be prompted to persist the configuration.
+
+#### Raspberry PI 4
+
+The configuration is stored in device-specific files under `/etc/vc-mipi/formats.d/` and includes:
+- `preferred_pixelformat_subdev`: The short format code (e.g., "Y12P", "Y10P")
+- `preferred_pixelformat_videodev`: The corresponding V4L2 pixel format (e.g., "Y10 ", "Y10P")
+
+The `set_rpi4_pipeline` script automatically loads and applies these preferences during system boot or when manually executed.
+
+### Viewing Current Configuration
+
+Use the "Show Config" option in `vc-config` to view both stored and currently active configuration:
+- **Stored Configuration**: What will be applied at boot
+- **Current Settings**: What is currently active on the device
+
 For more details on supported formats, see the official [Linux Pixel Formats documentation](https://www.kernel.org/doc/html/latest/userspace-api/media/v4l/pixfmt-bayer.html).
 
 ## Color Sensor Formats (Bayer Pattern)
