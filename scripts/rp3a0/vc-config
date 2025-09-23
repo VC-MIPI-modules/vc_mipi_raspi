@@ -1,0 +1,701 @@
+#!/bin/bash
+frontend_device="unicam-image"
+
+
+map_mediabus_to_fourcc() {
+    local mediabus_code=$1
+    local mediabusfmt=""
+    case $mediabus_code in
+        "0x3001")
+            mediabusfmt="BA81" #MEDIA_BUS_FMT_SBGGR8_1X8
+            ;;
+        "0x3002")
+            mediabusfmt="GRBG" #MEDIA_BUS_FMT_SGRBG8_1X8
+            ;;
+        "0x3013")
+            mediabusfmt="GBRG" #MEDIA_BUS_FMT_SGBRG8_1X8
+            ;;
+        "0x3014")
+            mediabusfmt="RGGB" #MEDIA_BUS_FMT_SRGGB8_1X8
+            ;;
+        "0x2001")
+            mediabusfmt="GREY" #MEDIA_BUS_FMT_Y8_1X8
+            ;;
+        "0x300e")
+            mediabusfmt="pGAA" #MEDIA_BUS_FMT_SGBRG10_1X10
+            ;;
+        "0x300f")
+            mediabusfmt="pRAA" #MEDIA_BUS_FMT_SRGGB10_1X10
+            ;;
+        "0x200a")
+            mediabusfmt="Y10P" #MEDIA_BUS_FMT_Y10_1X10 On the raspi Y10  is not used, but Y10P
+            ;;
+        "0x300a")
+            mediabusfmt="pgAA" #MEDIA_BUS_FMT_SGRBG10_1X10
+            ;;
+        "0x3007") 
+            mediabusfmt="pBAA" #MEDIA_BUS_FMT_SBGGR10_1X10
+            ;;
+        "0x3008")
+            mediabusfmt="pBCC" #MEDIA_BUS_FMT_SBGGR12_1X12
+            ;;
+        "0x3010")
+            mediabusfmt="pGCC" #MEDIA_BUS_FMT_SGBRG12_1X12 
+            ;;
+        "0x3011")
+            mediabusfmt="pgCC" #MEDIA_BUS_FMT_SGRBG12_1X12
+            ;;
+        "0x3012")
+            mediabusfmt="pRCC" #MEDIA_BUS_FMT_SRGGB12_1X12
+            ;;
+        "0x2013")
+            mediabusfmt="Y12P" #MEDIA_BUS_FMT_Y12_1X12
+            ;;       
+        "0x3019")
+            mediabusfmt="pBEE" #MEDIA_BUS_FMT_SBGGR14_1X14
+            ;;
+        "0x301a")
+            mediabusfmt="pGEE" #MEDIA_BUS_FMT_SGBRG14_1X14
+            ;;
+        "0x301b")
+            mediabusfmt="pgEE" #MEDIA_BUS_FMT_SGRBG14_1X14
+            ;;
+        "0x301c")
+            mediabusfmt="pREE" #MEDIA_BUS_FMT_SRGGB14_1X14
+            ;;
+        "0x202d")
+            mediabusfmt="Y14P" #MEDIA_BUS_FMT_Y14_1X14
+            ;;	
+        "0x301d")
+            mediabusfmt="BYR2" #MEDIA_BUS_FMT_SBGGR16_1X16
+            ;;
+        "0x301e")
+            mediabusfmt="GB16" #MEDIA_BUS_FMT_SGBRG16_1X16
+            ;;
+        "0x301f")
+            mediabusfmt="GR16" #MEDIA_BUS_FMT_SGRBG16_1X16
+            ;;
+        "0x3020")
+            mediabusfmt="RG16" #MEDIA_BUS_FMT_SRGGB16_1X16
+            ;;
+        "0x202e")
+            mediabusfmt="Y16 " #MEDIA_BUS_FMT_Y16_1X16
+            ;;       
+       
+        
+        *)
+            echo "Unknown mediabus code: $mediabus_code"
+            exit 1
+            ;;
+    esac
+    echo "$mediabusfmt"
+
+}
+get_mediabus_code() {
+    local subdev=$1
+
+    # Use v4l2-ctl to get the format of the subdevice and extract the mediabus code
+    v4l2-ctl --device=$subdev --get-subdev-fmt pad=0 | grep "Mediabus Code" | awk '{print $4}'
+}
+# Find all media devices and check for video0
+# Extract the hardware information from /proc/cpuinfo
+hardware_info=$(grep -m 1 'Hardware' /proc/cpuinfo | awk '{print $3}')
+revision_info=$(grep -m 1 'Revision' /proc/cpuinfo | awk '{print $3}')
+model_info=$(grep -m 1 'Model' /proc/cpuinfo | awk -F ': ' '{print $2}')
+
+# Convert the revision code to binary and extract the PPPP part (bits 23 to 20)
+revision_bin=$(printf "%032b\n" $((16#$revision_info)))
+pppp=$(( ($revision_bin >> 12) & 0xf ))
+echo "Revision binary: $revision_bin"
+# Convert the binary PPPP part back to hexadecimal
+pppp_hex=$(echo "obase=16; ibase=2; $pppp" | bc)
+ttt_hex=$(printf "%X\n" $(( ($revision_bin >> 4) & 0xFF )))
+
+# Display the hardware information
+echo "Hardware: $hardware_info"
+echo "Revision: $revision_info"
+echo "Model: $model_info"
+echo "PPPP: $pppp_hex"
+echo "TTTTTTTT: $ttt_hex"
+
+# Determine the Raspberry Pi model based on the revision code
+case $pppp_hex in
+0) echo "BCM2835";;
+1) echo "BCM2836";;
+2) echo "BCM2837";;
+3) echo "BCM2711";;
+4) echo "BCM2712";;
+esac
+configure_device_tree() {
+    local change=false
+        # Use whiptail to create a menu for selecting the camera
+    camera="cam0"
+
+    config_file="/boot/firmware/config_vc-mipi-driver-rp3a0.txt"
+
+    current_lanes=$(grep "^dtparam="$camera"_lanes" "$config_file" | awk -F 'lanes' '{print $2}')
+    current_manu=$(grep "^dtparam="$camera"_manu_" "$config_file" | awk -F '_manu_' '{print $2}')
+    lanes=$(whiptail --menu "Select the number of lanes:" 15 200 3 --default-item "$current_lanes" --cancel-button "Cancel"\
+            "1" "1 lane (i.e. OV7251, IMX296, IMX297)" \
+            "2" "2 lanes (i.e.  OV9281, IMX264, IMX265, IMX178, IMX183, IMX226, IMX250, IMX252, IMX273, IMX290, IMX327, IMX335, IMX392)" 3>&1 1>&2 2>&3)
+    
+    
+    
+    # Use whiptail to create a menu for selecting the number of lanes
+    
+    if [ $? -ne 0 ]; then
+        break
+    fi 
+    if [ "$lanes" != "$current_lanes" ]; then
+        change=true
+        sudo sed -i "s/^dtparam=${camera}_lanes[0-9]*/dtparam=${camera}_lanes${lanes}/" "$config_file"
+    fi
+    manufacturer=$(whiptail --menu "Manufacturer:" 15 200 3  --default-item "$current_manu" \
+    "sony" "SONY IMX" \
+    "ov" "OMNIVISION" \
+    3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        break
+    fi 
+        if [ "$manufacturer" != "$current_manu" ]; then
+        change=true
+            sudo sed -i "s/^dtparam=${camera}_manu_.*/dtparam=${camera}_manu_${manufacturer}/" "$config_file"
+    fi
+      
+    if [ "$change" = true ]; then   
+        whiptail --msgbox "Please reboot system" 8 40 --title "Success" 3>&1 1>&2 2>&3
+        sleep 2
+    fi
+}
+get_format_entity()
+{
+    local subdev=$1
+    local entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
+
+    format=$(media-ctl -d "$mediadev" -p | grep -A 2 "$subdev" | grep fmt: | awk -F ':' '{ print $2 }' | awk -F ' ' '{print $1}')
+
+    echo "$format"
+}
+get_mediadevice() {
+    local subdev=$1
+    subdev=${subdev#/dev/}
+    for mediadev in /dev/media*; do
+        if media-ctl -d "$mediadev" -p | grep -q "$subdev"; then
+            echo "$mediadev"
+            return
+        fi
+    done
+    exit 1
+    
+}
+get_cropping() {
+    local subdev=$1
+    local mediadev
+    mediadev=$(get_mediadevice "$subdev")
+    echo "Using media device: $mediadev" >&2
+    local entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
+    local cropping_line=$(media-ctl -d "$mediadev" -p | grep -A 6 "$entity_name" | grep crop: | awk -F ':' '{ print $2 }' | awk -F ' ' '{print $1}')
+    echo "$cropping_line" >&2
+    local left=$(echo "$cropping_line" | awk -F '[(),]' '{print $2}')
+    local top=$(echo "$cropping_line" | awk -F '[(),]' '{print $3}')
+    local width=$(echo "$cropping_line" | awk -F '[x/]' '{print $2}')
+    local height=$(echo "$cropping_line" | awk -F '[x/]' '{print $3}' | awk '{print $1}')
+    echo "Cropping values: left=$left, top=$top, width=$width, height=$height" >&2
+    echo "$left $top $width $height"
+}
+
+configure_video_device() {
+
+    local subdev=$1
+    local videodev=$2
+
+        
+    for mediadev in /dev/media*; do
+        echo "Checking $mediadev..."
+        
+        # Skip if not a valid media device
+        if ! [ -e "$mediadev" ]; then
+            continue
+        fi
+        
+        # Get media device number
+        media_num=$(echo "$mediadev" | grep -o '[0-9]*$')
+        
+        # Check if this media device has video0
+        if media-ctl -d "$mediadev" -p | grep -q "$videodev"; then
+            echo "Found $videodev on $mediadev"
+            
+            # Your existing script logic here
+        
+            media-ctl -d "$mediadev" -r
+
+            mediabus_code=$(get_mediabus_code $subdev )
+
+            # Print the mediabus code
+            echo "Mediabus code of subdevice $subdev: '$mediabus_code'"
+            fmt=$(map_mediabus_to_fourcc $mediabus_code)
+            echo "Format of subdevice $subdev: $fmt"
+
+            resolution=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
+            width=$(echo $resolution | awk -F 'x' '{ print $1 }')
+            height=$(echo $resolution | awk -F 'x' '{ print $2 }')
+            mediabusfmt=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15- | xargs echo -n)
+            format="$mediabusfmt/$resolution"
+
+            entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
+            echo media-ctl -d "$mediadev" -p | grep -B 3 "$subdev"
+            echo "Code: $fmt"
+            media-ctl -d "$mediadev" -l ''\'"$entity_name"\'':0 -> '\''unicam-image'\'':0 [1]' 
+            
+            v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb
+            echo "v4l2-ctl -d $videodev --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb"
+            
+            if ! timeout 5 v4l2-ctl --verbose --stream-mmap --device=$videodev --stream-count=3; then
+                echo "No image recorded for $videodev" | sudo tee /dev/kmsg
+            fi
+            
+                                   
+           
+            return
+        fi
+    done
+}
+set_cropping()
+{
+    local subdev=$1
+    local videodev=$2
+    local width=$3
+    local height=$4
+    local left=$5
+    local top=$6
+
+    if [ $subdev = "" ]; then
+        echo "No subdevice specified"
+        return
+    fi
+    if [ $videodev = "" ]; then
+        echo "No video device specified"
+        return
+    fi
+
+        
+     for mediadev in /dev/media*; do
+        echo "Checking $mediadev..."
+        
+        # Skip if not a valid media device
+        if ! [ -e "$mediadev" ]; then
+            continue
+        fi
+        
+        # Get media device number
+        media_num=$(echo "$mediadev" | grep -o '[0-9]*$')
+        
+        # Check if this media device has video0
+        if media-ctl -d "$mediadev" -p | grep -q "$videodev"; then
+            echo "Found $videodev on $mediadev"
+            
+            # Your existing script logic here
+        
+            media-ctl -d "$mediadev" 
+
+            mediabus_code=$(get_mediabus_code $subdev )
+
+            # Print the mediabus code
+            echo "Mediabus code of subdevice $subdev: '$mediabus_code'"
+            fmt=$(map_mediabus_to_fourcc $mediabus_code)
+
+            mediabusfmt=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15- | xargs echo -n)
+
+            
+            entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
+            echo media-ctl -d "$mediadev" -p | grep -B 3 "$subdev"
+            echo "Code: $fmt"
+            echo "media-ctl -d $mediadev --set-v4l2 \"'$entity_name':0[crop:(${left},${top})/${width}x${height}]\""
+            media-ctl -d $mediadev --set-v4l2 "'$entity_name':0[crop:(${left},${top})/${width}x${height}]" 
+            media-ctl -d $mediadev -V "'csi2':0 [fmt:$mediabusfmt/${width}x${height} field:none colorspace:srgb]" 
+
+            v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb 
+
+            if v4l2-ctl --verbose  --stream-mmap --device=$videodev --stream-count=3;then
+                whiptail --infobox "Successfully set ROI to $width x $height" 8 40 --title "Success"
+                sleep 1
+            else
+                whiptail --infobox "Failed to set ROI to $width x $height" 8 40 --ok-button "OK" --title "Error"
+                sleep 1
+            fi
+            return
+        fi
+    done
+
+}
+set_roi() {
+
+    local subdev=$1
+    local videodev=$2
+    local width=$3
+    local height=$4
+
+    if [ $subdev = "" ]; then
+        echo "No subdevice specified"
+        return
+    fi
+    if [ $videodev = "" ]; then
+        echo "No video device specified"
+        return
+    fi
+
+        
+    for mediadev in /dev/media*; do
+        echo "Checking $mediadev..."
+        
+        # Skip if not a valid media device
+        if ! [ -e "$mediadev" ]; then
+            continue
+        fi
+        
+        # Get media device number
+        media_num=$(echo "$mediadev" | grep -o '[0-9]*$')
+        
+        # Check if this media device has video0
+        if media-ctl -d "$mediadev" -p | grep -q "$videodev"; then
+            echo "Found $videodev on $mediadev"           
+        
+
+            mediabus_code=$(get_mediabus_code $subdev )
+
+            # Print the mediabus code
+            echo "Mediabus code of subdevice $subdev: '$mediabus_code'"
+            fmt=$(map_mediabus_to_fourcc $mediabus_code)
+            echo "Format of subdevice $subdev: $fmt"
+
+            resolution=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
+          
+            mediabusfmt=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15- | xargs echo -n)
+            format="$mediabusfmt/$resolution"
+            
+            entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
+            echo media-ctl -d "$mediadev" -p | grep -B 3 "$subdev"
+            echo "Code: $fmt"
+            media-ctl -d "$mediadev" -l ''\'"$entity_name"\'':0 -> '\''unicam-image'\'':0 [1]' 
+            
+            echo "media-ctl -d $mediadev -V \"'$entity_name':0 [fmt:$mediabusfmt/${width}x${height} field:none colorspace:srgb]\"" 
+            media-ctl -d $mediadev -V "'$entity_name':0 [fmt:$mediabusfmt/${width}x${height} field:none colorspace:srgb]" 
+            v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb
+   
+    if v4l2-ctl --verbose  --stream-mmap --device=$videodev --stream-count=3;then
+        whiptail --infobox "Successfully set ROI to $width x $height" 8 40 --title "Success"
+        sleep 1
+    else
+        whiptail --infobox "Failed to set ROI to $width x $height" 8 40 --ok-button "OK" --title "Error"
+        sleep 1
+    fi
+    return
+        fi
+    done
+}
+set_format() {
+
+    local videodev=$1      
+    local fmt=$2    
+    resolution=$(v4l2-ctl --device=$videodev --all | grep 'Width/Height' | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
+    cur_width=$(echo $resolution | awk -F 'x' '{ print $1 }')
+    cur_height=$(echo $resolution | awk -F 'x' '{ print $2 }')
+
+    v4l2-ctl -d "$videodev" --set-fmt-video=width=$cur_width,height=$cur_height,pixelformat="$fmt",colorspace=srgb 
+
+    v4l2-ctl --verbose  --stream-mmap --device=$videodev --stream-count=3
+    sleep 2        
+    
+}
+
+dialog_set_roi() 
+{
+    local subdev=$1
+    local videodev=$2
+    # Read the current resolution of the videodev
+
+    resolution=$(v4l2-ctl --device=$videodev --all | grep 'Width/Height' | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
+    cur_width=$(echo $resolution | awk -F 'x' '{ print $1 }')
+    cur_height=$(echo $resolution | awk -F 'x' '{ print $2 }')
+
+    # Use whiptail to prompt the user to enter width and height
+    width=$(whiptail --inputbox "Enter the desired width:" 8 40 $cur_width 3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        break
+    fi 
+    height=$(whiptail --inputbox "Enter the desired height:" 8 40 $cur_height 3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        break
+    fi 
+
+    echo "Selected subdevice: $subdev"
+    echo "Width: $width, Height: $height, Subdevice: $subdev, Device: $videodev"
+    set_roi "$subdev" "$videodev" "$width" "$height"
+    
+}
+dialog_set_cropping()
+{
+    local subdev=$1
+    local videodev=$2
+
+    read cur_left cur_top cur_width cur_height <<< $(get_cropping "$subdev")
+
+
+    # Use whiptail to prompt the user to enter width and height
+    width=$(whiptail --inputbox "Enter the desired width:" 8 40 $cur_width 3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        return
+    fi 
+    height=$(whiptail --inputbox "Enter the desired height:" 8 40 $cur_height 3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        return
+    fi 
+    left=$(whiptail --inputbox "Enter the left offset:" 8 40 $cur_left 3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        return
+    fi
+    top=$(whiptail --inputbox "Enter the top offset:" 8 40 $cur_top 3>&1 1>&2 2>&3)
+
+    echo "Selected subdevice: $subdev"
+    echo "Width: $width, Height: $height, Subdevice: $subdev, Device: $videodev"
+    set_cropping "$subdev" "$videodev" "$width" "$height" "$left" "$top"
+}
+dialog_set_debuglevel()
+{
+
+
+    currentlevel=$(cat "/sys/module/vc_mipi_core/parameters/debug")
+
+    echo "Current debug level: $currentlevel"
+
+    # Use whiptail to prompt the user to enter debug level
+    debuglevel=$(whiptail --menu "At least Logging level:" 15 200 6  --default-item "$currentlevel" \
+     "1" "Errors" \
+     "2" "Warnings" \
+     "3" "Notices" \
+     "4" "Infos" \
+     "5" "Debug" \
+     "6" "Registers" \
+        3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        break
+    fi 
+    echo "Selected subdevice: $subdev"
+    echo "Debug level: $debuglevel"
+    echo $debuglevel | sudo tee /sys/module/vc_mipi_core/parameters/debug
+}
+dialog_set_format() 
+{
+       local videodev=$1
+
+    declare -A format_map
+    format_map=(
+        ["BGGR8"]="SBGGR8_1X8"
+        ["GRBG8"]="SGRBG8_1X8"
+        ["GBRG8"]="SGBRG8_1X8"
+        ["RGGB8"]="SRGGB8_1X8"
+        ["Y8"]="Y8_1X8"
+        ["GBRG10"]="SGBRG10_1X10"
+        ["RGGB10"]="SRGGB10_1X10"
+        ["Y10P"]="Y10_1X10"
+        ["GRBG10"]="SGRBG10_1X10"
+        ["BGGR10"]="SBGGR10_1X10"
+        ["BGGR12"]="SBGGR12_1X12"
+        ["GBRG12"]="SGBRG12_1X12"
+        ["GRBG12"]="SGRBG12_1X12"
+        ["RGGB12"]="SRGGB12_1X12"
+        ["Y12P"]="Y12_1X12"
+        ["BGGR14"]="SBGGR14_1X14"
+        ["GBRG14"]="SGBRG14_1X14"
+        ["GRBG14"]="SGRBG14_1X14"
+        ["RGGB14"]="SRGGB14_1X14"
+        ["Y14"]="Y14_1X14"
+        ["BGGR16"]="SBGGR16_1X16"
+        ["GB16"]="SGBRG16_1X16"
+        ["GR16"]="SGRBG16_1X16"
+        ["RG16"]="SRGGB16_1X16"
+        ["Y16"]="Y16_1X16"
+    )
+
+       menu_options_format=(
+        "Y8" "Greyscale 8-bit"
+        "Y10" "Greyscale 10-bit"
+        "Y12" "Greyscale 12-bit"
+        "Y14" "Bayer Y14 14-bit"
+        "Y16" "Greyscale 16-bit"
+        "BGGR8" "Bayer BGGR 8-bit"
+        "GRBG8" "Bayer GRBG 8-bit"
+        "GBRG8" "Bayer GBRG 8-bit"
+        "RGGB8" "Bayer RGGB 8-bit"
+        "GBRG10" "Bayer GBRG 10-bit"
+        "RGGB10" "Bayer RGGB 10-bit"
+        "GRBG10" "Bayer GRBG 10-bit"
+        "BGGR10" "Bayer BGGR 10-bit"
+        "BGGR12" "Bayer BGGR 12-bit"
+        "GBRG12" "Bayer GBRG 12-bit"
+        "GRBG12" "Bayer GRBG 12-bit"
+        "RGGB12" "Bayer RGGB 12-bit"
+        "BGGR14" "Bayer BGGR 14-bit"
+        "GBRG14" "Bayer GBRG 14-bit"
+        "GRBG14" "Bayer GRBG 14-bit"
+        "RGGB14" "Bayer RGGB 14-bit"   
+        "BGGR16" "Bayer BGGR 16-bit"
+        "GB16" "Bayer GBRG 16-bit"
+        "GR16" "Bayer GRBG 16-bit"
+        "RG16" "Bayer RGGB 16-bit"
+    )
+
+    # Use whiptail to prompt the user to select the format
+    mediabusfmt=$(whiptail --menu "Select the sensor format" 25 50 16 "${menu_options_format[@]}" 3>&1 1>&2 2>&3)
+
+    
+    if [ $? -ne 0 ]; then
+        return
+    fi
+    # Lookup the full mediabus format code
+    full_mediabusfmt=${format_map[$mediabusfmt]}
+    echo "Selected format: $full_mediabusfmt"
+    set_format "$videodev" "$full_mediabusfmt"
+}
+
+dialog_get_versions()
+{
+    core_version=$(cat /sys/module/vc_mipi_core/version)
+    modules_version=$(cat /sys/module/vc_mipi_modules/version)
+    camera_version=$(cat /sys/module/vc_mipi_camera/version)
+
+    whiptail --msgbox "vc_mipi_core version:    $core_version\nvc_mipi_modules version: $modules_version\nvc_mipi_camera version:  $camera_version" 15 50 --title "Version Information" 3>&1 1>&2 2>&3
+
+}
+ 
+
+get_entity_name() {
+    local mediadev=$1
+    local entity_name=$(media-ctl -d "$mediadev" -p | grep "vc_mipi_camera" | awk -F 'vc_mipi_camera' '{print $2}' | awk '{print $1}' | tail -n +2 |head -n 1)
+    if [ -z "$entity_name" ]; then
+        echo "Error: vc_mipi_camera not found in $mediadev" >&2
+        exit 1
+    fi
+    echo "$entity_name"
+}
+
+configure_subdev_controls() {
+    local subdev=$1
+    local videodev=$2
+
+    # Get all available controls for the subdevice
+    controls=$(v4l2-ctl --device=$subdev --list-ctrls | grep -v "flags=read-only" | grep -v " Controls" | grep -v "(button)" | awk '{print $1}' | grep -v '^$')
+
+    while true; do
+        # Create menu options for whiptail
+        menu_options=()
+        menu_options+=("Set ROI" "Set the region of interest")
+        menu_options+=("Set Cropping" "Set the cropping area")
+        menu_options+=("Configure Device Tree" "Configure the lanes for the mipi sensors")
+        menu_options+=("Format" "Set the format of the camera")
+        menu_options+=("Logging" "Set logging level")
+        menu_options+=("Version" "Get modules versions")
+
+        for control in $controls; do
+            if ! v4l2-ctl --device=$subdev --get-ctrl=$control;then
+                continue
+            fi
+            current_value=$(v4l2-ctl --device=$subdev --get-ctrl=$control | awk '{print $NF}')
+            control_info=$(v4l2-ctl --device=$subdev --list-ctrls | grep "$control")
+            if [[ "$current_value" != "denied"* && "$control_info" != *"Controls"* ]]; then
+                menu_options+=("$control" "$current_value")
+            fi
+        done
+
+        # Show the menu with controls
+        selected_control=$(whiptail --menu "Select the control to adjust:" 20 80 10 "${menu_options[@]}" 3>&1 1>&2 2>&3)
+        # Check if cancel was pressed
+        if [ $? -ne 0 ]; then
+            exit 0
+        fi    
+        if([ "$selected_control" == "Set ROI" ]); then
+            dialog_set_roi "$subdev" "$videodev"
+            continue
+        fi
+        if([ "$selected_control" == "Set Cropping" ]); then
+            dialog_set_cropping "$subdev" "$videodev"
+            continue
+        fi
+        if([ "$selected_control" == "Logging" ]); then
+            dialog_set_debuglevel 
+            continue
+        fi
+        if([ "$selected_control" == "Configure Device Tree" ]); then
+            configure_device_tree
+            continue
+        fi
+        if([ "$selected_control" == "Format" ]); then
+            dialog_set_format "$videodev"
+            continue
+        fi
+        if([ "$selected_control" == "Version" ]); then
+            dialog_get_versions 
+            continue
+        fi
+
+
+        # Get the current value of the selected control
+        current_value=$(v4l2-ctl --device=$subdev --get-ctrl=$selected_control | awk '{print $NF}')
+        
+        # Prompt the user to enter a new value for the control
+        new_value=$(whiptail --inputbox "Enter the value for $selected_control (current: $current_value):" 8 40 "$current_value" 3>&1 1>&2 2>&3)
+        
+        # Check if cancel was pressed
+        if [ $? -ne 0 ]; then
+            continue
+        fi
+        
+        # Set the new value for the control
+        if v4l2-ctl --device=$subdev --set-ctrl=$selected_control=$new_value; then
+            TERM=ansi whiptail --infobox "Successfully set $selected_control to $new_value" 8 40 --title "Success" 
+            sleep 1
+        else
+            whiptail --infobox "Failed to set $selected_control to $new_value" 8 40 --ok-button "OK" --title "Error"  
+            sleep 1
+
+        fi
+
+        if([ "$selected_control" == "binning_mode" ]); then
+            configure_video_device "$subdev" "$videodev"
+        fi
+    done
+}
+
+declare -A dev_subdev_map
+
+# Scan all media devices and collect subdevice names
+subdevices=()
+menu_options=()
+for mediadev in /dev/media*; do
+    if media-ctl -d "$mediadev" -p | grep -q "vc_mipi_camera"; then
+        subdev=$(media-ctl -d "$mediadev" -p | grep " vc_mipi_camera" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
+        dev=$(media-ctl -d "$mediadev" -p | grep " $frontend_device" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
+        dev_subdev_map["$dev"]="$subdev"
+
+        menu_options+=( "$dev" "$subdev" )
+
+    fi
+done
+if [ ${#menu_options[@]} -eq 0 ]; then
+echo "No camera detected"
+    whiptail --msgbox "No camera detected \nCheck the setup or the lanes configuration" 8 40 --title "Error" 3>&1 1>&2 2>&3
+    if [ $? -ne 0 ]; then
+        exit 1
+    fi
+    configure_device_tree
+    sleep 1
+    exit 1
+fi
+# Use whiptail to create a menu with the collected subdevice names
+selected_dev=$(whiptail --menu "Select the sensor" 10 60 3 "${menu_options[@]}" 3>&1 1>&2 2>&3)
+if [ $? -ne 0 ]; then
+    exit 1
+fi
+selected_subdev=${dev_subdev_map["$selected_dev"]}
+configure_subdev_controls "$selected_subdev" "$selected_dev"
+

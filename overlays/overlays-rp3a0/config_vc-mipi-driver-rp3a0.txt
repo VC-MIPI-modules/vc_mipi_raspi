@@ -1,0 +1,72 @@
+################################################################################
+##  This configuration is to get the VC MIPI Sensors running.
+##  Entry order is important!
+################################################################################
+
+
+
+
+
+
+################################################################################
+# cam0 #########################################################################
+### For enabling the cam0, uncomment the following line 
+### Setup the correct lanes fitting your sensor
+### disabled    => cam0_lanes0
+### 1           => cam0_lanes1 
+### 2           => cam0_lanes2
+### 4           => cam0_lanes4
+### ------------------------------------------------------------------------------------------------
+###  Supported number of lanes
+### -----+------------------------------------------------------------------------------------------
+###  1   | OV7251, IMX296, IMX297
+###  2   | OV9281, IMX264, IMX265
+###  2,4 | IMX178, IMX183, IMX226, IMX250, IMX252, IMX273, IMX290, IMX327, IMX335, IMX392, 
+###      | IMX412, IMX415, IMX462, IMX565, IMX566, IMX567, IMX568, IMX900
+### ------------------------------------------------------------------------------------------------
+###  Sensor manufacturer
+### -----+------------------------------------------------------------------------------------------
+### Omnivision (OV7251,OV9281)    => cam0_manu_ov
+### Sony(IMX...       )           => cam0_manu_sony
+
+
+dtoverlay=vc-mipi-rp3a0-cam0
+dtparam=cam0_lanes2
+dtparam=cam0_manu_sony
+dtparam=cam0_libcamera_off
+
+################################################################################
+# cam1 #########################################################################
+### For enabling the cam1, uncomment the following line 
+### Setup the correct lanes fitting your sensor
+### disabled    => cam1_lanes0
+### 1           => cam1_lanes1 
+### 2           => cam1_lanes2
+### 4           => cam1_lanes4
+### ------------------------------------------------------------------------------------------------
+###  Supported number of lanes
+### -----+------------------------------------------------------------------------------------------
+###  1   | OV7251, IMX296, IMX297
+###  2   | OV9281, IMX264, IMX265
+###  2,4 | IMX178, IMX183, IMX226, IMX250, IMX252, IMX273, IMX290, IMX327, IMX335, IMX392, 
+###      | IMX412, IMX415, IMX462, IMX565, IMX566, IMX567, IMX568, IMX900
+### ------------------------------------------------------------------------------------------------
+###  Sensor manufacturer
+### -----+------------------------------------------------------------------------------------------
+### Omnivision (OV7251,OV9281)    => cam1_manu_ov
+### Sony(IMX...       )           => cam1_manu_sony
+
+dtoverlay=vc-mipi-rp3a0-cam1
+dtparam=cam1_lanes2
+dtparam=cam1_manu_sony
+dtparam=cam1_libcamera_off
+
+################################################################################
+# memory #######################################################################
+##
+###
+### Allocation of contiguous memory (cma) needed for camera captures
+###
+
+dtoverlay=vc-mipi-common-memory-contiguous
+

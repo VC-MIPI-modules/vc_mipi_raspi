@@ -1,0 +1,14 @@
+Source: vc-mipi-driver-rp3a0
+Section: kernel
+Priority: optional
+Maintainer: Vision Components <info@vision-components.com>
+Build-Depends: debhelper-compat (= 13), dkms, dh-dkms, debhelper (>= 13), device-tree-compiler
+
+Package: vc-mipi-driver-rp3a0
+Architecture: arm64
+Depends: ${misc:Depends}, dkms, v4l-utils, whiptail
+Description: DKMS source for the ${DRIVER_NAME} driver
+ This package provides the source code for the Vision Components
+ MIPI CSI-2 camera driver kernel module for rp3a0 (Raspi3).
+ .
+ This package contains the source to be built with dkms.
