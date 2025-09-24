@@ -1,6 +1,3 @@
-var/lib/dkms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source/* var/lib/dkms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source/
-var/lib/dkms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source/post_install var/lib/dkms/vc-mipi-driver-${MODULE_VERSION}/${VERSION_DEB_PACKAGE}/source/
-
 usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/dkms.conf usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/
 usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/Makefile usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/
 usr/src/vc-mipi-driver-${MODULE_VERSION}-${VERSION_DEB_PACKAGE}/overlays/*.txt usr/share/vc-mipi-driver-${MODULE_VERSION}-dkms/overlays/

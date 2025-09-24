@@ -157,6 +157,36 @@ get_mediabus_code() {
     # Use v4l2-ctl to get the format of the subdevice and extract the mediabus code
     v4l2-ctl --device=$subdev --get-subdev-fmt pad=0 | grep "Mediabus Code" | awk '{print $4}'
 }
+get_pixelformat_fourcc() {
+    local videodev=$1
+
+    v4l2-ctl --device=$videodev --get-fmt-video | grep "Pixel Format" | awk -F "'" '{print $2}'
+
+}
+
+# Function to get stored configuration for a device
+get_stored_config_for_dev() {
+    local subdev=$1
+    local mediadev=$2
+
+    # Find the entity name that owns this subdev (two first tokens of entity line)
+    local entity_name
+    entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
+    local sanitized
+    sanitized=$(tr -cs 'a-zA-Z0-9._-' '_' <<<"$entity_name")
+
+    local cfg_dev="/etc/vc-mipi/formats.d/${sanitized}.conf"
+    if [ -f "$cfg_dev" ]; then
+        # shellcheck disable=SC1090
+        . "$cfg_dev"
+        printf "Subdev FourCC: '%s'\n" "$preferred_pixelformat_subdev"
+        printf "VideoDev FourCC: '%s'\n" "$preferred_pixelformat_videodev"
+        return 0
+    fi
+
+    echo "No stored configuration found"
+    return 1
+}
 # Find all media devices and check for video0
 # Extract the hardware information from /proc/cpuinfo
 hardware_info=$(grep -m 1 'Hardware' /proc/cpuinfo | awk '{print $3}')
@@ -285,7 +315,6 @@ configure_video_device() {
 
         
     for mediadev in /dev/media*; do
-        echo "Checking $mediadev..."
         
         # Skip if not a valid media device
         if ! [ -e "$mediadev" ]; then
@@ -515,9 +544,7 @@ set_format_unpacked() {
     local videodev=$1
     local mediabusfmt=$2
         
-    for mediadev in /dev/media*; do
-        echo "Checking $mediadev..."
-        
+    for mediadev in /dev/media*; do        
         # Skip if not a valid media device
         if ! [ -e "$mediadev" ]; then
             continue
@@ -666,12 +693,12 @@ dialog_set_format()
 
     declare -A format_map
     format_map=(
-        ["Y8"]="Y8_1X8"      
+        ["Y8 "]="Y8_1X8"      
         ["BGGR8"]="SBGGR8_1X8"
         ["GRBG8"]="SGRBG8_1X8"
         ["GBRG8"]="SGBRG8_1X8"
         ["RGGB8"]="SRGGB8_1X8"
-        ["Y10"]="Y10_1X10"
+        ["Y10 "]="Y10_1X10"
         ["Y10P"]="Y10_1X10"
         ["GRBG10"]="SGRBG10_1X10"
         ["BGGR10"]="SBGGR10_1X10"
@@ -681,7 +708,7 @@ dialog_set_format()
         ["GBRG10P"]="SGBRG10_1X10"
         ["GRBG10P"]="SGRBG10_1X10"
         ["RGGB10P"]="SRGGB10_1X10"
-        ["Y12"]="Y12_1X12"
+        ["Y12 "]="Y12_1X12"
         ["Y12P"]="Y12_1X12"
         ["BGGR12"]="SBGGR12_1X12"
         ["GBRG12"]="SGBRG12_1X12"
@@ -691,7 +718,7 @@ dialog_set_format()
         ["GBRG12P"]="SGBRG12_1X12"
         ["GRBG12P"]="SGRBG12_1X12"
         ["RGGB12P"]="SRGGB12_1X12"
-        ["Y14"]="Y14_1X14"
+        ["Y14 "]="Y14_1X14"
         ["Y14P"]="Y14_1X14"
         ["BGGR14"]="SBGGR14_1X14"
         ["GBRG14"]="SGBRG14_1X14"
@@ -705,18 +732,18 @@ dialog_set_format()
         ["GB16"]="SGBRG16_1X16"
         ["GR16"]="SGRBG16_1X16"
         ["RG16"]="SRGGB16_1X16"
-        ["Y16"]="Y16_1X16"
+        ["Y16 "]="Y16_1X16"
     )
 
     menu_options_format=(
         "Y8" "Greyscale 8-bit"
-        "Y10" "Greyscale 10-bit"
+        "Y10 " "Greyscale 10-bit"
         "Y10P" "Greyscale 10-bit packed"
-        "Y12" "Greyscale 12-bit"
+        "Y12 " "Greyscale 12-bit"
         "Y12P" "Greyscale 12-bit packed"
-        "Y14" "Bayer Y14 14-bit"
+        "Y14 " "Bayer Y14 14-bit"
         "Y14P" "Greyscale 14-bit packed"
-        "Y16" "Greyscale 16-bit"
+        "Y16 " "Greyscale 16-bit"
         "BGGR8" "Bayer BGGR 8-bit"
         "GRBG8" "Bayer GRBG 8-bit"
         "GBRG8" "Bayer GBRG 8-bit"
@@ -786,9 +813,9 @@ dialog_set_format()
     # After building supported_full, add packed variants for 10, 12, 14 bits
     supported_with_packed=()
     declare -A packed_map=(
-        ["Y10"]="Y10P"
-        ["Y12"]="Y12P"
-        ["Y14"]="Y14P"
+        ["Y10 "]="Y10P"
+        ["Y12 "]="Y12P"
+        ["Y14 "]="Y14P"
         ["BGGR10"]="BGGR10P"
         ["GBRG10"]="GBRG10P"
         ["GRBG10"]="GRBG10P"
@@ -890,6 +917,34 @@ dialog_set_format()
 
 }
 
+dialog_show_config()
+{
+    local subdev=$1
+    local videodev=$2
+
+    # Find the media device for this video device
+    local mediadev_for_vdev=""
+    for m in /dev/media*; do
+        if media-ctl -d "$m" -p | grep -q "$videodev"; then
+            mediadev_for_vdev="$m"; break
+        fi
+    done
+
+    if [ -n "$mediadev_for_vdev" ]; then
+        stored_config=$(get_stored_config_for_dev "$subdev" "$mediadev_for_vdev")
+        if [ $? -eq 0 ]; then
+            current_format=$(v4l2-ctl -d "$subdev" --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15-)
+            current_resolution=$(v4l2-ctl -d "$subdev" --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x')
+            current_pixelformat=$(v4l2-ctl -d "$videodev" --get-fmt-video | grep "Pixel Format" | awk -F "'" '{print $2}')
+            
+            whiptail --msgbox "=== Stored Configuration ===\n$stored_config\n\n=== Current Settings ===\nFormat: $current_format\nResolution: $current_resolution\nPixel Format: $current_pixelformat" 15 60 --title "Configuration" 3>&1 1>&2 2>&3
+        else
+            whiptail --msgbox "No stored configuration found for this device." 8 50 --title "Configuration" 3>&1 1>&2 2>&3
+        fi
+    else
+        whiptail --msgbox "Could not find media device for $videodev" 8 50 --title "Error" 3>&1 1>&2 2>&3
+    fi
+}
 
 dialog_get_versions()
 {
@@ -904,7 +959,7 @@ dialog_get_versions()
 
 get_entity_name() {
     local mediadev=$1
-    local entity_name=$(media-ctl -d "$mediadev" -p | grep "vc_mipi_camera" | awk -F 'vc_mipi_camera' '{print $2}' | awk '{print $1}' | tail -n +2 |head -n 1)
+    local entity_name=$(media-ctl -d "$mediadev" -p | grep " vc_mipi_camera " | awk -F 'vc_mipi_camera ' '{print $2}' | awk '{print $1}'  |head -n 1)
     if [ -z "$entity_name" ]; then
         echo "Error: vc_mipi_camera not found in $mediadev" >&2
         exit 1
@@ -926,6 +981,7 @@ configure_subdev_controls() {
         menu_options+=("Set Cropping" "Set the cropping area")
         menu_options+=("Configure Device Tree" "Configure the lanes for the mipi sensors")
         menu_options+=("Format" "Set the format of the camera")
+        menu_options+=("Show Config" "Show stored configuration")
         menu_options+=("Logging" "Set logging level")
         menu_options+=("Version" "Get modules versions")
 
@@ -964,6 +1020,10 @@ configure_subdev_controls() {
         fi
         if([ "$selected_control" == "Format" ]); then
             dialog_set_format "$videodev"
+            continue
+        fi
+        if([ "$selected_control" == "Show Config" ]); then
+            dialog_show_config "$subdev" "$videodev"
             continue
         fi
         if([ "$selected_control" == "Version" ]); then

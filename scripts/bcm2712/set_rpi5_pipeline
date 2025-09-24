@@ -110,16 +110,6 @@ get_preferred_format_short_for_dev() {
             return 0
         fi
     fi
-
-    local cfg_glob="/etc/vc-mipi/format.conf"
-    if [ -f "$cfg_glob" ]; then
-        # shellcheck disable=SC1090
-        . "$cfg_glob"
-        if [ -n "$preferred_format_short" ]; then
-            echo "$preferred_format_short"
-            return 0
-        fi
-    fi
     return 1
 }
 
