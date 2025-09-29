@@ -303,7 +303,6 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
         struct vc_cam *cam = to_vc_cam(sd);
         struct vc_state *state = &cam->state;
         struct device *dev = sd->dev;
-        int reset = 0;
         int ret = 0;
 
         vc_dbg(dev, "%s(): Set streaming: %s\n", __func__, enable ? "on" : "off");
@@ -319,23 +318,19 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
                 {
                         pm_runtime_put_noidle(dev);
                         goto err_unlock;
-
                 }
-
                
                 ret |= vc_sen_set_exposure(cam, cam->state.exposure );
-                update_frame_rate_ctrl(cam,device);
-                if (!ret && reset)
-                {
-                        ret |= vc_sen_set_gain(cam, cam->state.gain, true);
-                        ret |= vc_sen_set_blacklevel(cam, cam->state.blacklevel);
-                }
+                ret |= vc_sen_start_stream(cam);
 
-                ret = vc_sen_start_stream(cam);
+
                 if (ret)
                 {
                        goto err_rpm_put;
                 }
+
+                update_frame_rate_ctrl(cam,device);           
+
         }
         else
         {
