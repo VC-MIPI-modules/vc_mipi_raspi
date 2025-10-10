@@ -92,6 +92,7 @@ map_mediabus_to_fourcc() {
 
 }
 
+
 map_mediabus_to_related_unpacked_fourcc() {
     local mediabus_code=$1
     local mediabusfmt=""
@@ -141,6 +142,9 @@ map_mediabus_to_related_unpacked_fourcc() {
         "0x202d")
             mediabusfmt="Y16 " #MEDIA_BUS_FMT_Y14_1X14
             ;;	
+        "0x2001")
+            mediabusfmt="Y16 " #MEDIA_BUS_FMT_Y8_1X8
+            ;;
        
         
         *)
@@ -157,6 +161,17 @@ get_mediabus_code() {
     # Use v4l2-ctl to get the format of the subdevice and extract the mediabus code
     v4l2-ctl --device=$subdev --get-subdev-fmt pad=0 | grep "Mediabus Code" | awk '{print $4}'
 }
+get_mediabus_code_string() {
+    local subdev=$1
+    v4l2-ctl -d "$subdev" --get-subdev-fmt pad=0 2>/dev/null \
+      | grep -E 'MEDIA_BUS_FMT_' \
+      | awk -F': ' '{print $2}' \
+      | awk '{print $2}' \
+      | sed 's/^MEDIA_BUS_FMT_//' \
+      | grep -v '^_' \
+      | awk -F'_' '{print $4}' 
+}
+
 get_pixelformat_fourcc() {
     local videodev=$1
 
@@ -278,7 +293,11 @@ get_format_entity()
     local subdev=$1
     local entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
 
-    format=$(media-ctl -d "$mediadev" -p | grep -A 2 "$subdev" | grep fmt: | awk -F ':' '{ print $2 }' | awk -F ' ' '{print $1}')
+    format=$(media-ctl -d "$mediadev" -p \
+        | grep -A 2 "$subdev" \
+        | grep fmt: \
+        | awk -F 'fmt:' '{ print $2 }' \
+        | awk '{ print $1 }')
 
     echo "$format"
 }
@@ -436,7 +455,6 @@ set_cropping()
 
         
      for mediadev in /dev/media*; do
-        echo "Checking $mediadev..."
         
         # Skip if not a valid media device
         if ! [ -e "$mediadev" ]; then
@@ -528,7 +546,7 @@ set_format() {
             fmt=$(map_mediabus_to_fourcc $mediabus_code)
 
             v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat="$fmt",colorspace=srgb 
-
+ 
             v4l2-ctl --verbose  --stream-mmap --device=$videodev --stream-count=3
             sleep 2
             
@@ -544,7 +562,7 @@ set_format_unpacked() {
     local videodev=$1
     local mediabusfmt=$2
         
-    for mediadev in /dev/media*; do        
+    for mediadev in /dev/media*; do
         # Skip if not a valid media device
         if ! [ -e "$mediadev" ]; then
             continue
@@ -569,7 +587,6 @@ set_format_unpacked() {
             height=$(echo $resolution | awk -F 'x' '{ print $2 }')
             format="$mediabusfmt/$resolution"
             media-ctl -d "$mediadev" -r
-            media-ctl -d "$mediadev" -V ''\''vc_mipi_camera '$entity_name''\'':0 [fmt:'"$format"' field:none colorspace:srgb]'
 
             new_format=$(get_format_entity $subdev)
             
@@ -581,24 +598,16 @@ set_format_unpacked() {
             else
                 cfe_fmt="SRGGB16_1X16"  # Default fallback
             fi
-            
+
             new_format_cfe="$cfe_fmt/"$width"x"$height""
-            echo "New format: '$new_format' '$new_format_cfe'"
-            if([ "$new_format" != "$format" ]); then
-                echo "Failed to set format to $mediabusfmt"
-                whiptail --msgbox "Failed to set format to $mediabusfmt Format is probably not supported by sensor" 8 40 --ok-button "OK" --title "Error" 
-                sleep 1
-                media-ctl -d "$mediadev" -V ''\''csi2'\'':0 [fmt:'"$new_format"' field:none colorspace:srgb]' 
-                media-ctl -d "$mediadev" -V ''\''csi2'\'':4 [fmt:'"$new_format_cfe"' field:none colorspace:srgb]' 
-                media-ctl -d "$mediadev" -l ''\''csi2'\'':4 -> '\''rp1-cfe-csi2_ch0'\'':0 [1]' 
-                return
-            fi
+          
+            echo "Setting format to $new_format_cfe"
+            media-ctl -d "$mediadev" -V ''\''vc_mipi_camera '$entity_name''\'':0 [fmt:'"$format"' field:none colorspace:srgb]'
+            media-ctl -d "$mediadev" -V "'csi2':0 [fmt:"$format" field:none colorspace:srgb]"
 
-            media-ctl -d "$mediadev" -V ''\''csi2'\'':0 [fmt:'"$format"' field:none colorspace:srgb]' 
-            media-ctl -d "$mediadev" -V ''\''csi2'\'':4 [fmt:'"$new_format_cfe"' field:none colorspace:srgb]' 
+            media-ctl -d "$mediadev"  -V "'csi2':4 [fmt:"$new_format_cfe" field:none colorspace:srgb]"
 
-
-            media-ctl -d "$mediadev" -l ''\''csi2'\'':4 -> '\''rp1-cfe-csi2_ch0'\'':0 [1]' 
+            media-ctl -v  -d "$mediadev" -l "'csi2':4 -> 'rp1-cfe-csi2_ch0':0 [1]" 
             mediabus_code=$(get_mediabus_code $subdev )
             fmt=$(map_mediabus_to_related_unpacked_fourcc $mediabus_code)
 
@@ -736,7 +745,7 @@ dialog_set_format()
     )
 
     menu_options_format=(
-        "Y8" "Greyscale 8-bit"
+        "Y8 " "Greyscale 8-bit"
         "Y10 " "Greyscale 10-bit"
         "Y10P" "Greyscale 10-bit packed"
         "Y12 " "Greyscale 12-bit"
@@ -875,7 +884,6 @@ dialog_set_format()
     # Use whiptail to prompt the user to select the format (supported-first ordering)
     mediabusfmt=$(whiptail --menu "Select the sensor format" 25 60 16 "${ordered_menu[@]}" 3>&1 1>&2 2>&3)
 
-    
     if [ $? -ne 0 ]; then
         return
     fi
@@ -891,29 +899,35 @@ dialog_set_format()
 
 
     if [[ -n "$mediabusfmt" && -v packed_map[$mediabusfmt] ]]; then
-        set_format "$videodev" "$full_mediabusfmt"
-    else
         echo "Selected format {$mediabusfmt} is unpacked, output set to unpacked with 16 bits." >&2
         set_format_unpacked "$videodev" "$full_mediabusfmt"
+
+    else
+        echo "Selected format '$mediabusfmt' is packed, output set to packed." >&2
+        set_format "$videodev" "$full_mediabusfmt"
     fi
 
     if whiptail --yesno "Persist the selected format so it is applied automatically at boot for this camera?" 10 80 --title "Persist format"; then
         
-        sudo mkdir -p /etc/vc-mipi/formats.d 2>/dev/null       
+                sudo mkdir -p /etc/vc-mipi/formats.d 2>/dev/null
 
-      
-        if [ -n "$mediadev_for_vdev" ]; then
-            # Find the sensor subdev attached to this media device
-            subdev_for_vdev=$(media-ctl -d "$mediadev_for_vdev" -p | grep "vc_mipi_camera" -A 2 | grep "device node name" | awk '{print $4}' | head -n1)
-            # Derive entity name like set_rpi5_pipeline does (first two tokens of the entity line)
-            entity_name=$(media-ctl -d "$mediadev_for_vdev" -p | grep -B 3 "$subdev_for_vdev" | grep entity | awk -F ': ' '{ print $2 }' | awk '{ print $1, $2 }')
+            mediadev=$(get_mediadevice "$subdev")
+
+            entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk '{ print $1, $2 }')
             sanitized_entity=$(tr -cs 'a-zA-Z0-9._-' '_' <<<"$entity_name")
-            {
-                echo "# Auto-generated by vc-config for entity: $entity_name"
-                echo "preferred_pixelformat_subdev=$mediabusfmt"
-            } | sudo tee "/etc/vc-mipi/formats.d/${sanitized_entity}.conf" >/dev/null
-        fi
+            
+            # Get the current pixelformat that would be used
+            subdev_format=$(get_mediabus_code_string "$subdev")
+
+            video_format=$(get_pixelformat_fourcc "$videodev")
+           {
+            echo "# Auto-generated by vc-config for entity: $entity_name"
+            printf 'preferred_pixelformat_subdev="%s"\n' "$subdev_format"
+            printf 'preferred_pixelformat_videodev="%s"\n' "$video_format"
+           
+            } |  sudo tee "/etc/vc-mipi/formats.d/${sanitized_entity}.conf" >/dev/null
     fi
+    
 
 }
 

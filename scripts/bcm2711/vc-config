@@ -866,7 +866,7 @@ dialog_set_format()
         echo "Selected format {$mediabusfmt} is unpacked, output set to corresponding unpacked format." >&2
         set_format_unpacked "$videodev" "$full_mediabusfmt"
     else
-    set_format "$videodev" "$full_mediabusfmt"
+        set_format "$videodev" "$full_mediabusfmt"
     fi
 
     if whiptail --yesno "Persist the selected format so it is applied automatically at boot for this camera?" 10 80 --title "Persist format"; then
