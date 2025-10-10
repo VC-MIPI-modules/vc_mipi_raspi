@@ -8,6 +8,13 @@ The ISP uses optimisations like
 
 Copy the Makefile from repo to your device and call ```make all```
 *or* the following steps have to done manually
+You can also download file directy by:
+```shell
+wget https://raw.githubusercontent.com/VC-MIPI-modules/vc_mipi_raspi/main/Makefile
+```
+## Raspberry Pi 4
+
+Call ```make all-rpi4``` instead of make all
 
 ## 1.Install dependencies
 ```shell
