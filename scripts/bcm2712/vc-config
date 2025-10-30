@@ -969,6 +969,27 @@ dialog_get_versions()
     whiptail --msgbox "vc_mipi_core version:    $core_version\nvc_mipi_modules version: $modules_version\nvc_mipi_camera version:  $camera_version" 15 50 --title "Version Information" 3>&1 1>&2 2>&3
 
 }
+
+dialog_test_gstreamer()
+{
+    # Get the mDNS hostname
+    mdns_name=$(hostname).local
+    
+    if whiptail --yesno "This will start a GStreamer pipeline with libcamerasrc that streams video over TCP on port 5000.\n\nTo view the stream from another device, run:\ngst-launch-1.0 tcpclientsrc host=$mdns_name port=5000 ! multipartdemux ! jpegdec ! autovideosink\n\nThe pipeline will run until you press Ctrl+C.\n\nDo you want to continue?" 16 90 --title "GStreamer Test"; then
+        echo "Starting GStreamer pipeline..."
+        echo "You can view the stream by connecting to this device on port 5000"
+        echo "Client command: gst-launch-1.0 tcpclientsrc host=$mdns_name port=5000 ! multipartdemux ! jpegdec ! autovideosink"
+        echo "Press Ctrl+C to stop the stream"
+        sleep 3
+        
+        gst-launch-1.0 libcamerasrc ! \
+            video/x-raw,colorimetry=bt709,format=NV12,width=1280,height=720,framerate=30/1 ! \
+            queue ! jpegenc ! multipartmux ! \
+            tcpserversink host=0.0.0.0 port=5000
+        
+        whiptail --msgbox "GStreamer pipeline stopped." 8 40 --title "Info" 3>&1 1>&2 2>&3
+    fi
+}
  
 
 get_entity_name() {
@@ -998,6 +1019,7 @@ configure_subdev_controls() {
         menu_options+=("Show Config" "Show stored configuration")
         menu_options+=("Logging" "Set logging level")
         menu_options+=("Version" "Get modules versions")
+        menu_options+=("GStreamer Test" "Test camera with GStreamer libcamerasrc")
 
         for control in $controls; do
             if ! v4l2-ctl --device=$subdev --get-ctrl=$control;then
@@ -1042,6 +1064,10 @@ configure_subdev_controls() {
         fi
         if([ "$selected_control" == "Version" ]); then
             dialog_get_versions 
+            continue
+        fi
+        if([ "$selected_control" == "GStreamer Test" ]); then
+            dialog_test_gstreamer 
             continue
         fi
 
