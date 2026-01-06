@@ -11,7 +11,7 @@
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-event.h>
 
-#define VERSION_CAMERA "0.6.10"
+#define VERSION_CAMERA "0.6.11"
 
 int debug = 3;
 // --- Prototypes --------------------------------------------------------------
