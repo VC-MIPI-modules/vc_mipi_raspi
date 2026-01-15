@@ -7,10 +7,10 @@ modules=("bcm2712" "bcm2711" "bcm2837" "vccmi10" "rp3a0")
 
 # Set version if not set
 if [ -z "$VERSION_DEB_PACKAGE" ]; then
-    export VERSION_DEB_PACKAGE="0.6.10"
+    export VERSION_DEB_PACKAGE="0.6.8"
 fi
 if [ -z "$VERSION_CORE" ]; then
-    export VERSION_CORE="0.6.10"
+    export VERSION_CORE="0.6.8"
 fi
 
 # Delete v from version
