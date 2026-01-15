@@ -16,12 +16,7 @@ ARCH=`dpkg --print-architecture`
 
 dkms_configure () {
 
-    # Clean up any broken state before attempting installation
-    if dkms status "$NAME/$VERSION" >/dev/null 2>&1; then
-        echo "Found existing DKMS module, cleaning up first"
-        dkms remove "$NAME/$VERSION" --all || true
-    fi
-
+    
     for POSTINST in /usr/lib/dkms/common.postinst "/usr/share/$PACKAGE_NAME/debian/postinst"; do
         if [ -f "$POSTINST" ]; then
             echo "Running $POSTINST ${NAME} ${VERSION} /usr/share/$PACKAGE_NAME $ARCH $2"

@@ -9,7 +9,9 @@ get_supported_short_codes() {
       | grep -E 'MEDIA_BUS_FMT_' \
       | awk -F': ' '{print $2}' \
       | awk '{print $1}' \
-      | sed 's/^MEDIA_BUS_FMT_//'
+      | sed 's/^MEDIA_BUS_FMT_//' \
+      | grep -v '^_' \
+      | awk -F'_' '{print $1}' 
 }
 
 # Sanitize entity name for filesystem
@@ -18,7 +20,7 @@ sanitize_entity_name() {
 }
 
 build_format_maps() {
-    # Short code -> MEDIA_BUS_FMT_*
+
     declare -gA FORMAT_MAP=(
         [Y8]=Y8_1X8
         [BGGR8]=SBGGR8_1X8
@@ -62,14 +64,6 @@ build_format_maps() {
         [Y16]=Y16_1X16
     )
 
-    # Build reverse map for supported list normalization
-    declare -gA REVERSE_FORMAT_MAP=()
-    for k in "${!FORMAT_MAP[@]}"; do
-        if [[ ! "$k" =~ P$ ]]; then
-            REVERSE_FORMAT_MAP["${FORMAT_MAP[$k]}"]="$k"
-        fi
-    done
-
     # Unpacked->Packed companions and bookkeeping
     declare -gA PACKED_MAP=(
         [Y10]=Y10P
@@ -105,21 +99,33 @@ get_preferred_format_short_for_dev() {
     if [ -f "$cfg_dev" ]; then
         # shellcheck disable=SC1090
         . "$cfg_dev"
-        if [ -n "$preferred_format_short" ]; then
-            echo "$preferred_format_short"
+        if [ -n "$preferred_pixelformat_subdev" ]; then
+            echo "$preferred_pixelformat_subdev"
             return 0
         fi
     fi
 
-    local cfg_glob="/etc/vc-mipi/format.conf"
-    if [ -f "$cfg_glob" ]; then
+     return 1
+}
+get_preferred_format_for_dev() {
+    local subdev=$1
+    local mediadev=$2
+
+    local entity_name
+    entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
+    local sanitized
+    sanitized=$(sanitize_entity_name "$entity_name")
+
+    local cfg_dev="/etc/vc-mipi/formats.d/${sanitized}.conf"
+    if [ -f "$cfg_dev" ]; then
         # shellcheck disable=SC1090
-        . "$cfg_glob"
-        if [ -n "$preferred_format_short" ]; then
-            echo "$preferred_format_short"
+        . "$cfg_dev"
+        if [ -n "$preferred_pixelformat_videodev" ]; then
+            echo "$preferred_pixelformat_videodev"
             return 0
         fi
     fi
+    
     return 1
 }
 
@@ -134,15 +140,17 @@ apply_preferred_format_if_supported() {
     local -a supported_with_packed=()
     declare -A _already_in=()
     for fmt in "${_supported_full[@]}"; do
-        local short="${REVERSE_FORMAT_MAP[$fmt]:-}"
-        if [ -n "$short" ]; then
-            supported_with_packed+=("$short")
-            if [[ -n "${PACKED_MAP[$short]:-}" && -z "${_already_in[${PACKED_MAP[$short]}]:-}" ]]; then
-                supported_with_packed+=("${PACKED_MAP[$short]}")
-                _already_in["${PACKED_MAP[$short]}"]=1
+        
+        if [ -n "$fmt" ]; then
+            supported_with_packed+=("$fmt")
+            if [[ -n "${PACKED_MAP[$fmt]:-}" && -z "${_already_in[${PACKED_MAP[$fmt]}]:-}" ]]; then
+                supported_with_packed+=("${PACKED_MAP[$fmt]}")
+                _already_in["${PACKED_MAP[$fmt]}"]=1
             fi
         fi
     done
+
+    echo "Supported formats for $subdev: ${supported_with_packed[*]}" >&2
 
     local preferred
     preferred=$(get_preferred_format_short_for_dev "$subdev" "$mediadev") || return 0
@@ -160,6 +168,10 @@ apply_preferred_format_if_supported() {
     fi
 
     local full="${FORMAT_MAP[$preferred]}"
+    if [ -z "$full" ] && [[ "$preferred" == S* ]]; then
+        local normalized="${preferred#S}"
+        full="${FORMAT_MAP[$normalized]}"
+    fi
     if [ -z "$full" ]; then
         echo "Could not map preferred short '$preferred' to MEDIA_BUS format; keeping default." >&2
         return 0
@@ -177,8 +189,12 @@ apply_preferred_format_if_supported() {
     local format_str
     format_str="${full}/${width}x${height}"
     echo "Applying preferred format for $subdev via media-ctl: ${format_str} on entity '$entity_name':0" >&2
-    media-ctl -d "$mediadev" -V "'$entity_name':0 [fmt:${format_str} field:none colorspace:srgb]" || \
+     if ! media-ctl -d "$mediadev" -V "'$entity_name':0 [fmt:${format_str} field:none colorspace:srgb]"; then
         echo "Failed to set preferred format on $subdev using media-ctl" >&2
+        return 0
+    fi
+
+    return 1
 }
 # --- End new helpers ---
 
@@ -191,7 +207,6 @@ is_vc_mipi_camera() {
         return 1  # false
     fi
 }
-
 map_mediabus_to_fourcc() {
     local mediabus_code=$1
     local mediabusfmt=""
@@ -281,6 +296,107 @@ map_mediabus_to_fourcc() {
     echo "$mediabusfmt"
 
 }
+
+fourcc_to_mediabus_format() {
+    local fourcc=${1// /}
+
+    case "$fourcc" in
+        BA81)
+            echo "SBGGR8_1X8"
+            ;;
+        GRBG)
+            echo "SGRBG8_1X8"
+            ;;
+        GBRG)
+            echo "SGBRG8_1X8"
+            ;;
+        RGGB)
+            echo "SRGGB8_1X8"
+            ;;
+        GREY)
+            echo "Y8_1X8"
+            ;;
+        pGAA)
+            echo "SGBRG10_1X10"
+            ;;
+        pRAA)
+            echo "SRGGB10_1X10"
+            ;;
+        Y10P)
+            echo "Y10_1X10"
+            ;;
+        pgAA)
+            echo "SGRBG10_1X10"
+            ;;
+        pBAA)
+            echo "SBGGR10_1X10"
+            ;;
+        pBCC)
+            echo "SBGGR12_1X12"
+            ;;
+        pGCC)
+            echo "SGBRG12_1X12"
+            ;;
+        pgCC)
+            echo "SGRBG12_1X12"
+            ;;
+        pRCC)
+            echo "SRGGB12_1X12"
+            ;;
+        Y12P)
+            echo "Y12_1X12"
+            ;;
+        pBEE)
+            echo "SBGGR14_1X14"
+            ;;
+        pGEE)
+            echo "SGBRG14_1X14"
+            ;;
+        pgEE)
+            echo "SGRBG14_1X14"
+            ;;
+        pREE)
+            echo "SRGGB14_1X14"
+            ;;
+        Y14P)
+            echo "Y14_1X14"
+            ;;
+        BYR2)
+            echo "SBGGR16_1X16"
+            ;;
+        GB16)
+            echo "SGBRG16_1X16"
+            ;;
+        GR16)
+            echo "SGRBG16_1X16"
+            ;;
+        RG16)
+            echo "SRGGB16_1X16"
+            ;;
+        Y16)
+            echo "Y16_1X16"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    return 0
+}
+
+video_supports_pixelformat() {
+    local videodev=$1
+    local fmt=$2
+
+    if [ -z "$fmt" ]; then
+        return 1
+    fi
+
+    v4l2-ctl -d "$videodev" --list-formats 2>/dev/null \
+        | awk -F"'" '/^\t\[/ { print $2 }' \
+        | grep -Fxq "$fmt"
+}
+
 get_mediabus_code() {
     local subdev=$1
 
@@ -292,6 +408,8 @@ configure_video_device() {
 
     local subdev=$1
     local videodev=$2
+
+    echo "Configuring video device $videodev for subdevice $subdev"
 
         
     for mediadev in /dev/media*; do
@@ -313,11 +431,32 @@ configure_video_device() {
 
             # New: try to apply preferred format configured via vc-config (using media-ctl)
             apply_preferred_format_if_supported "$subdev" "$mediadev"
+            rc=$?
 
-            mediabus_code=$(get_mediabus_code $subdev )
+            local preferred_video_fmt=""
+            local fmt_source="default"
+            local fmt=""
 
-            # Print the mediabus code
-            fmt=$(map_mediabus_to_fourcc $mediabus_code)
+            if [ "$rc" -eq 1 ]; then
+                preferred_video_fmt="$(get_preferred_format_for_dev "$subdev" "$mediadev")"
+                if [ -n "$preferred_video_fmt" ]; then
+                    if video_supports_pixelformat "$videodev" "$preferred_video_fmt"; then
+                        fmt="$preferred_video_fmt"
+                        fmt_source="preferred"
+                    else
+                        echo "Preferred video format '$preferred_video_fmt' not supported by $videodev; falling back." >&2
+                    fi
+                fi
+            else
+                echo "Using default format for $subdev, since preferred format application failed or not set" >&2
+            fi
+
+            if [ -z "$fmt" ]; then
+            echo "Using sensor default format for $subdev" >&2
+                fmt="$(map_mediabus_to_fourcc "$(get_mediabus_code "$subdev")")"
+            else
+                echo "Using preferred format '$fmt' for $videodev" >&2
+            fi
 
             resolution=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
             width=$(echo $resolution | awk -F 'x' '{ print $1 }')
@@ -325,10 +464,35 @@ configure_video_device() {
             mediabusfmt=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15- | xargs echo -n)
             format="$mediabusfmt/$resolution"
 
-            media-ctl -d "$mediadev" -V ''\''csi2'\'':4 [fmt:'"$format"' field:none colorspace:srgb]' 
-            media-ctl -d "$mediadev" -V ''\''csi2'\'':0 [fmt:'"$format"' field:none colorspace:srgb]' 
+            csi_sink_format="$format"
+            csi_source_format="$format"
+
+            if [ "$fmt_source" = "preferred" ]; then
+                if preferred_full=$(fourcc_to_mediabus_format "$fmt"); then
+                    if [ -n "$preferred_full" ]; then
+                        csi_source_format="${preferred_full}/${width}x${height}"
+                    fi
+                else
+                    echo "Could not derive mediabus format for preferred pixelformat '$fmt'; keeping sensor format on CSI output." >&2
+                fi
+            fi
+            echo "Sinking CSI2 format: $csi_sink_format" >&2
+            echo "Sourcing CSI2 format: $csi_source_format" >&2
+
+            media-ctl -d "$mediadev" -V ''\''csi2'\'':0 [fmt:'"$csi_sink_format"' field:none colorspace:srgb]' 
+            media-ctl -d "$mediadev" -V ''\''csi2'\'':4 [fmt:'"$csi_source_format"' field:none colorspace:srgb]' 
             media-ctl -d "$mediadev" -l ''\''csi2'\'':4 -> '\''rp1-cfe-csi2_ch0'\'':0 [1]' 
-            v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb 
+            if ! v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb; then
+                if [ "$fmt_source" = "preferred" ]; then
+                    local fallback_fmt
+                    fallback_fmt="$(map_mediabus_to_fourcc "$(get_mediabus_code "$subdev")")"
+                    echo "Failed to apply preferred pixelformat '$fmt' on $videodev; retrying with sensor default '$fallback_fmt'." >&2
+                    v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fallback_fmt,colorspace=srgb
+                    fmt="$fallback_fmt"
+                else
+                    echo "Failed to configure $videodev with pixelformat '$fmt'." >&2
+                fi
+            fi
             
             if ! timeout 5 v4l2-ctl --verbose --stream-mmap --device=$videodev --stream-count=3; then
                 echo "No image recorded for $videodev" | sudo tee /dev/kmsg

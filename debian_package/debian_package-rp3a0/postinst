@@ -16,7 +16,7 @@ ARCH=`dpkg --print-architecture`
 
 dkms_configure () {
 
-   
+  
     for POSTINST in /usr/lib/dkms/common.postinst "/usr/share/$PACKAGE_NAME/debian/postinst"; do
         if [ -f "$POSTINST" ]; then
             echo "Running $POSTINST ${NAME} ${VERSION} /usr/share/$PACKAGE_NAME $ARCH $2"

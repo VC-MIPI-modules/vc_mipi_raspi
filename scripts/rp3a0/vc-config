@@ -1,6 +1,6 @@
 #!/bin/bash
 frontend_device="unicam-image"
-config_file="/boot/firmware/config_vc-mipi-driver-bcm2837.txt"
+config_file="/boot/firmware/config_vc-mipi-driver-rp3a0.txt"
 
 
 map_mediabus_to_fourcc() {
