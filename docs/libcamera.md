@@ -48,6 +48,7 @@ sudo ninja -C build install
 ```shell
 git clone https://github.com/raspberrypi/rpicam-apps.git
 cd rpicam-apps
+git checkout v1.5.2
 meson setup build
 meson compile -C build
 sudo meson install -C build
