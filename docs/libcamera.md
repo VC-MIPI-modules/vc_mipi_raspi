@@ -49,7 +49,7 @@ sudo ninja -C build install
 git clone https://github.com/raspberrypi/rpicam-apps.git
 cd rpicam-apps
 git checkout v1.5.2
-meson setup build
+meson setup build  --buildtype=release --prefix=/usr -Ddownload_hailo_models=false -Ddownload_imx500_models=false -Denable_imx500=false
 meson compile -C build
 sudo meson install -C build
 echo "/usr/local/lib/aarch64-linux-gnu" > /etc/ld.so.conf.d/rpicam.conf
