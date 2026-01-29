@@ -199,7 +199,6 @@ get_stored_config_for_dev() {
     echo "No stored configuration found"
     return 1
 }
-# Find all media devices and check for video0
 # Extract the hardware information from /proc/cpuinfo
 hardware_info=$(grep -m 1 'Hardware' /proc/cpuinfo | awk '{print $3}')
 revision_info=$(grep -m 1 'Revision' /proc/cpuinfo | awk '{print $3}')
@@ -207,18 +206,12 @@ model_info=$(grep -m 1 'Model' /proc/cpuinfo | awk -F ': ' '{print $2}')
 
 # Convert the revision code to binary and extract the PPPP part (bits 23 to 20)
 revision_bin=$(printf "%032b\n" $((16#$revision_info)))
-pppp=$(( ($revision_bin >> 12) & 0xf ))
 echo "Revision binary: $revision_bin"
-# Convert the binary PPPP part back to hexadecimal
-pppp_hex=$(echo "obase=16; ibase=2; $pppp" | bc)
-ttt_hex=$(printf "%X\n" $(( ($revision_bin >> 4) & 0xFF )))
-
 # Display the hardware information
 echo "Hardware: $hardware_info"
 echo "Revision: $revision_info"
 echo "Model: $model_info"
-echo "PPPP: $pppp_hex"
-echo "TTTTTTTT: $ttt_hex"
+
 
 # Determine the Raspberry Pi model based on the revision code
 case $pppp_hex in

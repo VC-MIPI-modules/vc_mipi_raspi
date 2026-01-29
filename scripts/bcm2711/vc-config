@@ -199,7 +199,7 @@ get_stored_config_for_dev() {
     echo "No stored configuration found"
     return 1
 }
-# Find all media devices and check for video0
+
 # Extract the hardware information from /proc/cpuinfo
 hardware_info=$(grep -m 1 'Hardware' /proc/cpuinfo | awk '{print $3}')
 revision_info=$(grep -m 1 'Revision' /proc/cpuinfo | awk '{print $3}')
@@ -207,27 +207,26 @@ model_info=$(grep -m 1 'Model' /proc/cpuinfo | awk -F ': ' '{print $2}')
 
 # Convert the revision code to binary and extract the PPPP part (bits 23 to 20)
 revision_bin=$(printf "%032b\n" $((16#$revision_info)))
-pppp=$(( ($revision_bin >> 12) & 0xf ))
-echo "Revision binary: $revision_bin"
-# Convert the binary PPPP part back to hexadecimal
-pppp_hex=$(echo "obase=16; ibase=2; $pppp" | bc)
+pppp_hex=$(printf "%X" "$pppp")
 ttt_hex=$(printf "%X\n" $(( ($revision_bin >> 4) & 0xFF )))
+soc_name="unknown"
+case $pppp_hex in
+0) soc_name="BCM2835";;
+1) soc_name="BCM2836";;
+2) soc_name="BCM2837";;
+3) soc_name="BCM2711";;
+4) soc_name="BCM2712";;
+esac
 
-# Display the hardware information
-echo "Hardware: $hardware_info"
-echo "Revision: $revision_info"
-echo "Model: $model_info"
-echo "PPPP: $pppp_hex"
-echo "TTTTTTTT: $ttt_hex"
+echo "Revision binary: $revision_bin"
+echo "Hardware:        $hardware_info"
+echo "Revision:        $revision_info"
+echo "Model:           $model_info"
+echo "SoC Name:        $soc_name"
 
 # Determine the Raspberry Pi model based on the revision code
-case $pppp_hex in
-0) echo "BCM2835";;
-1) echo "BCM2836";;
-2) echo "BCM2837";;
-3) echo "BCM2711";;
-4) echo "BCM2712";;
-esac
+
+
 configure_device_tree() {
     local change=false
         # Use whiptail to create a menu for selecting the camera

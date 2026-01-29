@@ -1,0 +1,9 @@
+# Format: <soc-dir>: <part1> <part2> ...
+# Example entries. Create parts under scripts/parts/ to match these names.
+# Lines starting with # are comments.
+
+bcm2712: header common common_dialogs bcm2711_2712 bcm2712
+bcm2711: header common common_dialogs bcm2711_2712 bcm2711
+bcm2837: header common common_dialogs bcm2837
+rp3a0:   header common common_dialogs rp3a0
+vccmi10: header common common_dialogs vccmi10

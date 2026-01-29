@@ -1,0 +1,53 @@
+dialog_set_debuglevel()
+{
+
+
+    currentlevel=$(cat "/sys/module/vc_mipi_core/parameters/debug")
+
+    echo "Current debug level: $currentlevel"
+
+    debuglevel=$(whiptail --menu "At least Logging level:" 15 200 6  --default-item "$currentlevel" \
+     "1" "Errors" \
+     "2" "Warnings" \
+     "3" "Notices" \
+     "4" "Infos" \
+     "5" "Debug" \
+     "6" "Registers" \
+        3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        break
+    fi 
+    echo "Selected subdevice: $subdev"
+    echo "Debug level: $debuglevel"
+    echo $debuglevel | sudo tee /sys/module/vc_mipi_core/parameters/debug
+}
+dialog_get_versions()
+{
+    # Extract the hardware information from /proc/cpuinfo
+    revision_info=$(grep -m 1 'Revision' /proc/cpuinfo | awk '{print $3}')
+    model_info=$(grep -m 1 'Model' /proc/cpuinfo | awk -F ': ' '{print $2}')
+
+    # Convert the revision code to binary and extract the PPPP part (bits 23 to 20)
+    revision_bin=$(printf "%032b\n" $((16#$revision_info)))
+    pppp=$(( ($revision_bin >> 12) & 0xf ))
+
+    pppp_hex=$(printf "%X" "$pppp")
+    ttt_hex=$(printf "%X\n" $(( ($revision_bin >> 4) & 0xFF )))
+    soc_name="unknown"
+    case $pppp_hex in
+    0) soc_name="BCM2835";;
+    1) soc_name="BCM2836";;
+    2) soc_name="BCM2837";;
+    3) soc_name="BCM2711";;
+    4) soc_name="BCM2712";;
+    esac
+    core_version=$(cat /sys/module/vc_mipi_core/version)
+    modules_version=$(cat /sys/module/vc_mipi_modules/version)
+    camera_version=$(cat /sys/module/vc_mipi_camera/version)
+
+    # Log hardware, revision and model so it's visible in system logs
+    # Try to write to kernel message buffer if writable (requires root), otherwise use logger
+  
+    whiptail --msgbox "Model:    $model_info\nRevision: $revision_info\n\nvc_mipi_core version:    $core_version\nvc_mipi_modules version: $modules_version\nvc_mipi_camera version:  $camera_version" 15 60 --title "Version Information" 3>&1 1>&2 2>&3
+
+}

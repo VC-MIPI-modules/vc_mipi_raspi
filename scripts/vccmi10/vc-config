@@ -209,8 +209,7 @@ model_info=$(grep -m 1 'Model' /proc/cpuinfo | awk -F ': ' '{print $2}')
 revision_bin=$(printf "%032b\n" $((16#$revision_info)))
 pppp=$(( ($revision_bin >> 12) & 0xf ))
 echo "Revision binary: $revision_bin"
-# Convert the binary PPPP part back to hexadecimal
-pppp_hex=$(echo "obase=16; ibase=2; $pppp" | bc)
+pppp_hex=$(printf "%X" "$pppp")
 ttt_hex=$(printf "%X\n" $(( ($revision_bin >> 4) & 0xFF )))
 
 # Display the hardware information

@@ -1,0 +1,48 @@
+dialog_test_gstreamer()
+{
+    # Get the mDNS hostname
+    mdns_name=$(hostname).local
+    
+    if whiptail --yesno "This will start a GStreamer pipeline with libcamerasrc that streams video over TCP on port 5000.\n\nTo view the stream from another device, run:\ngst-launch-1.0 tcpclientsrc host=$mdns_name port=5000 ! multipartdemux ! jpegdec ! autovideosink\n\nThe pipeline will run until you press Ctrl+C.\n\nDo you want to continue?" 16 90 --title "GStreamer Test"; then
+        echo "Starting GStreamer pipeline..."
+        echo "You can view the stream by connecting to this device on port 5000"
+        echo "Client command: gst-launch-1.0 tcpclientsrc host=$mdns_name port=5000 ! multipartdemux ! jpegdec ! autovideosink"
+        echo "Press Ctrl+C to stop the stream"
+        sleep 3
+        
+        gst-launch-1.0 libcamerasrc ! \
+            video/x-raw,colorimetry=bt709,format=NV12,width=1280,height=720,framerate=30/1 ! \
+            queue ! jpegenc ! multipartmux ! \
+            tcpserversink host=0.0.0.0 port=5000
+        
+        whiptail --msgbox "GStreamer pipeline stopped." 8 40 --title "Info" 3>&1 1>&2 2>&3
+    fi
+}
+dialog_show_config()
+{
+    local subdev=$1
+    local videodev=$2
+
+    # Find the media device for this video device
+    local mediadev_for_vdev=""
+    for m in /dev/media*; do
+        if media-ctl -d "$m" -p | grep -q "$videodev"; then
+            mediadev_for_vdev="$m"; break
+        fi
+    done
+
+    if [ -n "$mediadev_for_vdev" ]; then
+        stored_config=$(get_stored_config_for_dev "$subdev" "$mediadev_for_vdev")
+        if [ $? -eq 0 ]; then
+            current_format=$(v4l2-ctl -d "$subdev" --get-subdev-fmt | grep Mediabus | awk -F ' ' '{ print $5 }' | tr -d '()' | cut -c 15-)
+            current_resolution=$(v4l2-ctl -d "$subdev" --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x')
+            current_pixelformat=$(v4l2-ctl -d "$videodev" --get-fmt-video | grep "Pixel Format" | awk -F "'" '{print $2}')
+            
+            whiptail --msgbox "=== Stored Configuration ===\n$stored_config\n\n=== Current Settings ===\nFormat: $current_format\nResolution: $current_resolution\nPixel Format: $current_pixelformat" 15 60 --title "Configuration" 3>&1 1>&2 2>&3
+        else
+            whiptail --msgbox "No stored configuration found for this device." 8 50 --title "Configuration" 3>&1 1>&2 2>&3
+        fi
+    else
+        whiptail --msgbox "Could not find media device for $videodev" 8 50 --title "Error" 3>&1 1>&2 2>&3
+    fi
+}

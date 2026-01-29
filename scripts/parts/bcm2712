@@ -25,7 +25,68 @@ get_stored_config_for_dev() {
     return 1
 }
 
+map_mediabus_to_related_unpacked_fourcc_raspi5() {
+    local mediabus_code=$1
+    local mediabusfmt=""
+    case $mediabus_code in
+        "0x300e")
+            mediabusfmt="GB16" #MEDIA_BUS_FMT_SGBRG10_1X10
+            ;;
+        "0x300f")
+            mediabusfmt="RG16" #MEDIA_BUS_FMT_SRGGB10_1X10
+            ;;
+        "0x200a")
+            mediabusfmt="Y16 " #MEDIA_BUS_FMT_Y10_1X10 
+            ;;
+        "0x300a")
+            mediabusfmt="GR16" #MEDIA_BUS_FMT_SGRBG10_1X10
+            ;;
+        "0x3007") 
+            mediabusfmt="BG16" #MEDIA_BUS_FMT_SBGGR10_1X10
+            ;;
+        "0x3008")
+            mediabusfmt="BG16" #MEDIA_BUS_FMT_SBGGR12_1X12
+            ;;
+        "0x3010")
+            mediabusfmt="GB16" #MEDIA_BUS_FMT_SGBRG12_1X12 
+            ;;
+        "0x3011")
+            mediabusfmt="GR16" #MEDIA_BUS_FMT_SGRBG12_1X12
+            ;;
+        "0x3012")
+            mediabusfmt="RG16" #MEDIA_BUS_FMT_SRGGB12_1X12
+            ;;
+        "0x2013")
+            mediabusfmt="Y16 " #MEDIA_BUS_FMT_Y12_1X12
+            ;;       
+        "0x3019")
+            mediabusfmt="BG16" #MEDIA_BUS_FMT_SBGGR14_1X14
+            ;;
+        "0x301a")
+            mediabusfmt="GB16" #MEDIA_BUS_FMT_SGBRG14_1X14
+            ;;
+        "0x301b")
+            mediabusfmt="GR16" #MEDIA_BUS_FMT_SGRBG14_1X14
+            ;;
+        "0x301c")
+            mediabusfmt="RG16" #MEDIA_BUS_FMT_SRGGB14_1X14
+            ;;
+        "0x202d")
+            mediabusfmt="Y16 " #MEDIA_BUS_FMT_Y14_1X14
+            ;;	
+        "0x2001")
+            mediabusfmt="Y16 " #MEDIA_BUS_FMT_Y8_1X8
+            ;;
+       
+        
+        *)
+            echo "Unknown mediabus code: $mediabus_code"
+            exit 1
+            ;;
+    esac
+    echo "$mediabusfmt"
 
+}
 
 configure_device_tree() {
     local change=false
@@ -397,7 +458,7 @@ set_format_unpacked() {
 
             media-ctl -v  -d "$mediadev" -l "'csi2':4 -> 'rp1-cfe-csi2_ch0':0 [1]" 
             mediabus_code=$(get_mediabus_code $subdev )
-            fmt=$(map_mediabus_to_related_unpacked_fourcc $mediabus_code)
+            fmt=$(map_mediabus_to_related_unpacked_fourcc_raspi5 $mediabus_code)
 
 
             v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat="$fmt",colorspace=srgb 
@@ -479,9 +540,9 @@ dialog_set_format()
 
     # Build description map from the menu options pairs
     declare -A format_desc_map
-    for ((i=0; i<${#menu_options_format[@]}; i+=2)); do
-        key="${menu_options_format[i]}"
-        val="${menu_options_format[i+1]}"
+    for ((i=0; i<${#menu_options_format_w_packed[@]}; i+=2)); do
+        key="${menu_options_format_w_packed[i]}"
+        val="${menu_options_format_w_packed[i+1]}"
         format_desc_map["$key"]="$val"
     done
 
@@ -549,9 +610,9 @@ dialog_set_format()
     fi
 
     # Append the rest (still avoiding duplicates)
-    for ((i=0; i<${#menu_options_format[@]}; i+=2)); do
-        key="${menu_options_format[i]}"
-        val="${menu_options_format[i+1]}"
+    for ((i=0; i<${#menu_options_format_w_packed[@]}; i+=2)); do
+        key="${menu_options_format_w_packed[i]}"
+        val="${menu_options_format_w_packed[i+1]}"
         if [ -z "${seen[$key]:-}" ]; then
             ordered_menu+=("$key" "$val")
             seen[$key]=1
@@ -572,8 +633,13 @@ dialog_set_format()
         return
     fi
 
-    full_mediabusfmt=${format_map[$mediabusfmt]}
-    echo "Selected format: $full_mediabusfmt"   
+    if [[ -n "$mediabusfmt" && -v format_map[$mediabusfmt] ]]; then
+        full_mediabusfmt=${format_map[$mediabusfmt]}
+        echo "Selected format: $full_mediabusfmt"
+    else
+        whiptail --msgbox "Unknown format selected: $mediabusfmt" 8 60 --title "Error"
+        return
+    fi
 
 
     if [[ -n "$mediabusfmt" && -v packed_map[$mediabusfmt] ]]; then
@@ -622,9 +688,14 @@ dialog_set_format_legacy()
         return
     fi
     # Lookup the full mediabus format code
-    full_mediabusfmt=${format_map[$mediabusfmt]}
-    echo "Selected format: $full_mediabusfmt"
-    set_format "$videodev" "$full_mediabusfmt"
+    if [[ -n "$mediabusfmt" && -v format_map[$mediabusfmt] ]]; then
+        full_mediabusfmt=${format_map[$mediabusfmt]}
+        echo "Selected format: $full_mediabusfmt"
+        set_format "$videodev" "$full_mediabusfmt"
+    else
+        whiptail --msgbox "Unknown format selected: $mediabusfmt" 8 60 --title "Error"
+        return
+    fi
 }
 
 dialog_show_config()
