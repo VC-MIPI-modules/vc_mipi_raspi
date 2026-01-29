@@ -32,3 +32,5 @@ build/
 *.tar.gz
 
 .env
+scripts/generated/**
+scripts/bcm2712/vc-set-format/build/**

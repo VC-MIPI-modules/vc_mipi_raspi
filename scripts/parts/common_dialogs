@@ -1,7 +1,5 @@
 dialog_set_debuglevel()
 {
-
-
     currentlevel=$(cat "/sys/module/vc_mipi_core/parameters/debug")
 
     echo "Current debug level: $currentlevel"
