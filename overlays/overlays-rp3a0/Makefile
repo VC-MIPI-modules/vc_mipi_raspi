@@ -14,4 +14,8 @@ dtbo: $(DEVICETREES)
 
 install: $(DEVICETREES)
 	@echo "\n### Installing DTBOs ###\n"
-	install -D -m 644 $(DEVICETREES) /boot/firmware/overlays/
+	sudo cp $(DEVICETREES)  /boot/firmware/overlays/
+	sudo cp config_vc-mipi-driver-rp3a0.txt /boot/firmware/
+	sudo chmod 644 /boot/firmware/overlays/$(DEVICETREES)
+	sudo chmod 644 /boot/firmware/config_vc-mipi-driver-rp3a0.txt
+	@echo "\n### DTBOs are installed ###\n"
