@@ -2,6 +2,28 @@
 
 # Find all media devices and check for video0
 frontend_device="unicam-image"
+
+# Check if media-controller API is supported for format changes
+check_mediactl_support() {
+    local subdev=$1
+    
+    # Try to set the current format back to itself as a test
+    local current_code=$(v4l2-ctl -d "$subdev" --get-subdev-fmt pad=0 2>/dev/null | grep "Mediabus Code" | awk '{print $4}')
+    
+    if [ -z "$current_code" ]; then
+        # Can't even read subdev format, media-controller not supported
+        return 1
+    fi
+    
+    # Try to set the format using v4l2-ctl
+    if v4l2-ctl -d "$subdev" --set-subdev-fmt pad=0,code="$current_code" 2>&1 | grep -q "Operation not permitted"; then
+        # EPERM means immutable links or no media-controller support
+        return 1
+    fi
+    
+    return 0
+}
+
 get_supported_short_codes() {
     local sd=$1
     v4l2-ctl -d "$sd" --list-subdev-mbus-codes pad=0 2>/dev/null \
@@ -9,10 +31,8 @@ get_supported_short_codes() {
       | awk -F': ' '{print $2}' \
       | awk '{print $1}' \
       | sed 's/^MEDIA_BUS_FMT_//' \
-      | grep -v '^_' \
-      | awk -F'_' '{print $1}' \
-      | cut -c 2-
-
+      | sed 's/_1X[0-9]*//' \
+      | sed 's/^S\([RBGY][RBGY]*[0-9]*\)/\1/'
 }
 
 # Sanitize entity name for filesystem
@@ -24,11 +44,13 @@ build_format_maps() {
 
     declare -gA FORMAT_MAP=(
         [Y8]=Y8_1X8
+        [GREY]=Y8_1X8
         [BGGR8]=SBGGR8_1X8
         [GRBG8]=SGRBG8_1X8
         [GBRG8]=SGBRG8_1X8
         [RGGB8]=SRGGB8_1X8
         [Y10]=Y10_1X10
+        [Y10 ]=Y10_1X10
         [Y10P]=Y10_1X10
         [GRBG10]=SGRBG10_1X10
         [BGGR10]=SBGGR10_1X10
@@ -39,6 +61,7 @@ build_format_maps() {
         [GRBG10P]=SGRBG10_1X10
         [RGGB10P]=SRGGB10_1X10
         [Y12]=Y12_1X12
+        [Y12 ]=Y12_1X12
         [Y12P]=Y12_1X12
         [BGGR12]=SBGGR12_1X12
         [GBRG12]=SGBRG12_1X12
@@ -49,6 +72,7 @@ build_format_maps() {
         [GRBG12P]=SGRBG12_1X12
         [RGGB12P]=SRGGB12_1X12
         [Y14]=Y14_1X14
+        [Y14 ]=Y14_1X14
         [Y14P]=Y14_1X14
         [BGGR14]=SBGGR14_1X14
         [GBRG14]=SGBRG14_1X14
@@ -63,13 +87,17 @@ build_format_maps() {
         [GR16]=SGRBG16_1X16
         [RG16]=SRGGB16_1X16
         [Y16]=Y16_1X16
+        [Y16 ]=Y16_1X16
     )
 
     # Unpacked->Packed companions and bookkeeping
     declare -gA PACKED_MAP=(
         [Y10]=Y10P
+        [Y10 ]=Y10P
         [Y12]=Y12P
+        [Y12 ]=Y12P
         [Y14]=Y14P
+        [Y14 ]=Y14P
         [BGGR10]=BGGR10P
         [GBRG10]=GBRG10P
         [GRBG10]=GRBG10P
@@ -144,6 +172,28 @@ apply_preferred_format_if_supported() {
         
         if [ -n "$fmt" ]; then
             supported_with_packed+=("$fmt")
+            # Add GREY alias if Y8 is supported
+            if [ "$fmt" = "Y8" ] && [ -z "${_already_in[GREY]:-}" ]; then
+                supported_with_packed+=("GREY")
+                _already_in["GREY"]=1
+            fi
+            # Add space-padded FourCC versions for Y10, Y12, Y14, Y16
+            if [ "$fmt" = "Y10" ] && [ -z "${_already_in[Y10 ]:-}" ]; then
+                supported_with_packed+=("Y10 ")
+                _already_in["Y10 "]=1
+            fi
+            if [ "$fmt" = "Y12" ] && [ -z "${_already_in[Y12 ]:-}" ]; then
+                supported_with_packed+=("Y12 ")
+                _already_in["Y12 "]=1
+            fi
+            if [ "$fmt" = "Y14" ] && [ -z "${_already_in[Y14 ]:-}" ]; then
+                supported_with_packed+=("Y14 ")
+                _already_in["Y14 "]=1
+            fi
+            if [ "$fmt" = "Y16" ] && [ -z "${_already_in[Y16 ]:-}" ]; then
+                supported_with_packed+=("Y16 ")
+                _already_in["Y16 "]=1
+            fi
             if [[ -n "${PACKED_MAP[$fmt]:-}" && -z "${_already_in[${PACKED_MAP[$fmt]}]:-}" ]]; then
                 supported_with_packed+=("${PACKED_MAP[$fmt]}")
                 _already_in["${PACKED_MAP[$fmt]}"]=1
@@ -185,10 +235,18 @@ apply_preferred_format_if_supported() {
     entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
     local format_str
     format_str="${full}/${width}x${height}"
-    echo "Applying preferred format for $subdev via media-ctl: ${format_str} on entity '$entity_name':0" >&2
-    if ! media-ctl -d "$mediadev" -V "'$entity_name':0 [fmt:${format_str} field:none colorspace:srgb]"; then
-        echo "Failed to set preferred format on $subdev using media-ctl" >&2
-        return 0
+    
+    # Check if media-controller API is supported
+    if check_mediactl_support "$subdev"; then
+        echo "Applying preferred format for $subdev via media-ctl: ${format_str} on entity '$entity_name':0" >&2
+        if ! media-ctl -d "$mediadev" -V "'$entity_name':0 [fmt:${format_str} field:none colorspace:srgb]"; then
+            echo "Failed to set preferred format on $subdev using media-ctl" >&2
+            return 0
+        fi
+    else
+        echo "Media-controller API not supported, format will be set via video device only" >&2
+        # Still return 1 to indicate we have a preferred format configured
+        # The video device format will be applied later in the pipeline
     fi
 
     return 1
@@ -342,7 +400,7 @@ configure_video_device() {
             height=$(echo $resolution | awk -F 'x' '{ print $2 }')
 
             entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk -F ' ' '{ print $1, $2 }')
-            media-ctl -d "$mediadev" -l ''\''"$entity_name"\''':0 -> '\''unicam-image'\'':0 [1]'
+            media-ctl -d "$mediadev" -l "'${entity_name}':0 -> 'unicam-image':0 [1]"
             
             v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb
             
