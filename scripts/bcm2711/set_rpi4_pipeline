@@ -244,9 +244,46 @@ apply_preferred_format_if_supported() {
             return 0
         fi
     else
-        echo "Media-controller API not supported, format will be set via video device only" >&2
-        # Still return 1 to indicate we have a preferred format configured
-        # The video device format will be applied later in the pipeline
+        echo "Media-controller API not supported, setting format directly on subdev" >&2
+        # Convert format name to media bus code
+        local code=""
+        case "$full" in
+            "Y8_1X8") code="0x2001" ;;
+            "Y10_1X10") code="0x200a" ;;
+            "Y12_1X12") code="0x2013" ;;
+            "Y14_1X14") code="0x202d" ;;
+            "Y16_1X16") code="0x202e" ;;
+            "SBGGR8_1X8") code="0x3001" ;;
+            "SGRBG8_1X8") code="0x3002" ;;
+            "SGBRG8_1X8") code="0x3013" ;;
+            "SRGGB8_1X8") code="0x3014" ;;
+            "SBGGR10_1X10") code="0x3007" ;;
+            "SGRBG10_1X10") code="0x300a" ;;
+            "SGBRG10_1X10") code="0x300e" ;;
+            "SRGGB10_1X10") code="0x300f" ;;
+            "SBGGR12_1X12") code="0x3008" ;;
+            "SGRBG12_1X12") code="0x3011" ;;
+            "SGBRG12_1X12") code="0x3010" ;;
+            "SRGGB12_1X12") code="0x3012" ;;
+            "SBGGR14_1X14") code="0x3019" ;;
+            "SGRBG14_1X14") code="0x301b" ;;
+            "SGBRG14_1X14") code="0x301a" ;;
+            "SRGGB14_1X14") code="0x301c" ;;
+            "SBGGR16_1X16") code="0x301d" ;;
+            "SGRBG16_1X16") code="0x301f" ;;
+            "SGBRG16_1X16") code="0x301e" ;;
+            "SRGGB16_1X16") code="0x3020" ;;
+            *)
+                echo "Unknown format: $full, cannot set subdev format" >&2
+                return 0
+                ;;
+        esac
+        
+        if ! v4l2-ctl -d "$subdev" --set-subdev-fmt pad=0,width=$width,height=$height,code=$code; then
+            echo "Failed to set preferred format on $subdev using v4l2-ctl" >&2
+            return 0
+        fi
+        echo "Successfully set subdev format to $full ($code)" >&2
     fi
 
     return 1
