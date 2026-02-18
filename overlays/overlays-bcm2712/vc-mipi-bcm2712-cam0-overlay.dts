@@ -59,6 +59,24 @@
 
 		};
 	};
+	fragment@4 {
+    	target-path = "/cam0_reg";
+    	__overlay__ {
+       		status = "disabled";
+    	};
+	};
+	fragment@5 {
+		target = <&rp1_gpio>;
+		__overlay__ {
+			cam0_trigger_gpio: cam0_trigger_gpio {
+				function = "gpio";
+				pins = "gpio26";
+				drive-strength = <0x0c>;   /* optional */
+				bias-disable;              /* no pull */
+				/* slew-rate = <0x01>; */  /* optional */
+			};
+		};
+	};
 	fragment@1001 {
 		target = <&i2c_csi_dsi>;
 		__dormant__ {
@@ -134,6 +152,7 @@
 			};
 		};
 	};
+
 
 
 	__overrides__ {

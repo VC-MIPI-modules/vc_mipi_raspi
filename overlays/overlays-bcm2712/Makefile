@@ -5,7 +5,6 @@ SENSOR_NAMES := vc-mipi-bcm2712-cam0
 SENSOR_NAMES += vc-mipi-bcm2712-cam1
 SENSOR_NAMES += vc-mipi-common-memory-contiguous
 DEVICETREES	:= $(foreach sentype,$(SENSOR_NAMES),$(sentype).dtbo)
-DEVICETREES_RM := $(foreach sentype,$(SENSOR_NAMES),$(sentype).dtbo)
 all: $(DEVICETREES) dtbo
 dtbo: $(DEVICETREES)
 	@echo "\n### DTBOs are built ###\n"
@@ -13,3 +12,9 @@ dtbo: $(DEVICETREES)
 
 %.dtbo: %-overlay.dts
 	$(DTC) $(DTC_FLAGS) -o $@ $<
+
+install: $(DEVICETREES)
+	@echo "\n### Installing DTBOs ###\n"
+	sudo cp $(DEVICETREES) /boot/firmware/overlays/
+	sudo chmod 644 /boot/firmware/overlays/$(DEVICETREES)
+	@echo "\n### DTBOs are installed ###\n"

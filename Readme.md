@@ -2,7 +2,8 @@
 This driver package is supporting the official Raspberry Pi 3+, 4 and 5 models and CM. 
 Downloads are available under 
 
-[Releases](https://github.com/VC-MIPI-modules/vc_mipi_raspi/releases)
+
+**[Releases](https://github.com/VC-MIPI-modules/vc_mipi_raspi/releases)**
 
 For mechanical installation see [Mechanical installation manual](https://github.com/VC-MIPI-modules/vc_mipi_core/blob/raspberrypi/develop/doc/mechanical_setup.md)
 
@@ -13,10 +14,10 @@ The OS can be installed by the official Raspberry Pi Imager from the Raspberry P
 [Raspberry Pi OS](https://www.raspberrypi.com/software/)
 
 Copy the debian package for your target system to the module:
-* BCM2712 ⇒ Raspi5, CM5
-* BCM2711 ⇒ Raspi4, CM4
-* BCM2837 ⇒ Raspi3+
-* RP3A0   ⇒ Raspi Zero 2
+* Raspi5, CM5    ⇒  BCM2712 
+* Raspi4, CM4    ⇒  BCM2711
+* Raspi3+        ⇒  BCM2837
+* Raspi Zero 2   ⇒  RP3A0   
 * VCCMI10 ⇒ [VC MIPI Compute Module Interface Board](https://www.mipi-modules.com/fileadmin/external/documentation/hardware/VC_MIPI_Compute_Module_Interface/index.html)
 
 
@@ -24,12 +25,18 @@ Run the installation with the installation of the needed packages:
 ```
 sudo apt install ./vc-mipi-driver-bcm2712_xxx_arm64.deb
 ```
-<b>or</b>
+
 Run the installation with manual packages:
+
+
+[!TIP]
+If you install the package with dpkg, you have to install the dependecies manually
 ```
 sudo apt install dkms linux-headers-generic v4l-utils whiptail
 sudo dpkg -i ./vc-mipi-driver-bcm2712_xxx_arm64.deb
 ```
+
+
 After a reboot the connected sensor(s) should be detected and visible as v4l2 capture devices
 Under the current Raspberry Pi OS with Bookworm, 
 the sensors are:
