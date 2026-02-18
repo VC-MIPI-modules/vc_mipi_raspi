@@ -11,7 +11,7 @@
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-event.h>
 
-#define VERSION_CAMERA "0.6.9"
+#define VERSION_CAMERA "0.6.10"
 
 int debug = 3;
 // --- Prototypes --------------------------------------------------------------
@@ -956,10 +956,10 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
         int num_lanes = mode->num_lanes;
         int bit_depth = vc_get_bit_depth(mode->format);
 
-        linkfreq.max = (unsigned long long)(cam->ctrl.clk_pixel) * bit_depth;
+        linkfreq.max = (unsigned long long)(cam->ctrl.clk_pixel) * bit_depth / num_lanes;
         linkfreq.def = linkfreq.max;
         linkfreq.min = linkfreq.max;
-        pixel_rate.max = cam->ctrl.clk_pixel * 2 * num_lanes; //DDR Double Data Rate
+        pixel_rate.max = cam->ctrl.clk_pixel * 2 * num_lanes / bit_depth; //DDR Double Data Rate
         pixel_rate.def = pixel_rate.max;
 
 
