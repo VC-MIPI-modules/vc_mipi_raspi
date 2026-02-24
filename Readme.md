@@ -29,12 +29,12 @@ sudo apt install ./vc-mipi-driver-bcm2712_xxx_arm64.deb
 Run the installation with manual packages:
 
 
-[!TIP]
-If you install the package with dpkg, you have to install the dependecies manually
-```
-sudo apt install dkms linux-headers-generic v4l-utils whiptail
-sudo dpkg -i ./vc-mipi-driver-bcm2712_xxx_arm64.deb
-```
+> [!TIP]
+> If you install the package with dpkg, you have to install the dependecies manually
+> ```
+> sudo apt install dkms linux-headers-generic v4l-utils whiptail
+> sudo dpkg -i ./vc-mipi-driver-bcm2712_xxx_arm64.deb
+> ```
 
 
 After a reboot the connected sensor(s) should be detected and visible as v4l2 capture devices
