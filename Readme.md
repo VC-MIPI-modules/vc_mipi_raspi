@@ -47,6 +47,22 @@ Raspi5
 | Cam0     | /dev/video0 | /dev/v4l-subdev2 |
 | Cam1     | /dev/video8 | /dev/v4l-subdev5 |
 
+> [!TIP]
+> **Raspi5 / Bookworm:** The `v4l-utils` version shipped with Raspberry Pi OS Bookworm (1.22.1) does **not** support unpacking raw Bayer pixel formats (e.g. `RG10`, `RG12`) from the capture device.  
+> Upgrade to **v4l-utils 1.30.1** from the Trixie repository before capturing raw data:
+> ```bash
+> echo "deb [arch=armhf] http://raspbian.raspberrypi.com/raspbian/ trixie main contrib non-free rpi" \
+>   | sudo tee /etc/apt/sources.list.d/raspbian-trixie.list
+> sudo tee /etc/apt/preferences.d/trixie-pin <<'EOF'
+> Package: *
+> Pin: release n=trixie
+> Pin-Priority: 100
+> EOF
+> sudo apt-get update
+> sudo apt-get install -t trixie v4l-utils
+> ```
+> See [docs/install_v4l2_utils.md](./docs/install_v4l2_utils.md) for full details.
+
 Raspi3-4
 | Camera   | Device      | Subdevice        |
 | -------- | ----------- | ---------------- |
