@@ -15,6 +15,8 @@ dtbo: $(DEVICETREES)
 
 install: $(DEVICETREES)
 	@echo "\n### Installing DTBOs ###\n"
-	sudo cp $(DEVICETREES) /boot/firmware/overlays/
+	sudo cp $(DEVICETREES)  /boot/firmware/overlays/
+	sudo cp config_vc-mipi-driver-bcm2712.txt /boot/firmware/
 	sudo chmod 644 /boot/firmware/overlays/$(DEVICETREES)
+	sudo chmod 644 /boot/firmware/config_vc-mipi-driver-bcm2712.txt
 	@echo "\n### DTBOs are installed ###\n"

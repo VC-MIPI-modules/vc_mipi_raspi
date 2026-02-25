@@ -97,6 +97,9 @@ map_mediabus_to_related_unpacked_fourcc() {
     local mediabus_code=$1
     local mediabusfmt=""
     case $mediabus_code in
+        "0x2001")
+            mediabusfmt="GREY" #MEDIA_BUS_FMT_Y8_1X8
+            ;;
         "0x300e")
             mediabusfmt="GB10" #MEDIA_BUS_FMT_SGBRG10_1X10
             ;;
@@ -110,7 +113,7 @@ map_mediabus_to_related_unpacked_fourcc() {
             mediabusfmt="GR10" #MEDIA_BUS_FMT_SGRBG10_1X10
             ;;
         "0x3007") 
-            mediabusfmt="BG12" #MEDIA_BUS_FMT_SBGGR10_1X10
+            mediabusfmt="BG10" #MEDIA_BUS_FMT_SBGGR10_1X10
             ;;
         "0x3008")
             mediabusfmt="BG12" #MEDIA_BUS_FMT_SBGGR12_1X12
@@ -145,8 +148,8 @@ map_mediabus_to_related_unpacked_fourcc() {
        
         
         *)
-            echo "Unknown mediabus code: $mediabus_code"
-            exit 1
+            # Fallback: try to get from map_mediabus_to_fourcc
+            mediabusfmt=$(map_mediabus_to_fourcc "$mediabus_code")
             ;;
     esac
     echo "$mediabusfmt"
@@ -160,20 +163,65 @@ get_mediabus_code() {
 }
 get_mediabus_code_string() {
     local subdev=$1
-    v4l2-ctl -d "$subdev" --list-subdev-mbus-codes pad=0 2>/dev/null \
-      | grep -E 'MEDIA_BUS_FMT_' \
-      | awk -F': ' '{print $2}' \
-      | awk '{print $1}' \
-      | sed 's/^MEDIA_BUS_FMT_//' \
-      | grep -v '^_' \
-      | awk -F'_' '{print $1}' \
-      | cut -c 2-
+    # Get the CURRENT format code and convert to short name
+    local code=$(v4l2-ctl -d "$subdev" --get-subdev-fmt pad=0 2>/dev/null | grep "Mediabus Code" | awk '{print $4}')
+    
+    # Convert hex code to format name
+    case "$code" in
+        "0x2001") echo "Y8" ;;
+        "0x200a") echo "Y10 " ;;
+        "0x2013") echo "Y12 " ;;
+        "0x202d") echo "Y14 " ;;
+        "0x202e") echo "Y16 " ;;
+        "0x3001") echo "BGGR8" ;;
+        "0x3002") echo "GRBG8" ;;
+        "0x3013") echo "GBRG8" ;;
+        "0x3014") echo "RGGB8" ;;
+        "0x3007") echo "BGGR10" ;;
+        "0x300a") echo "GRBG10" ;;
+        "0x300e") echo "GBRG10" ;;
+        "0x300f") echo "RGGB10" ;;
+        "0x3008") echo "BGGR12" ;;
+        "0x3011") echo "GRBG12" ;;
+        "0x3010") echo "GBRG12" ;;
+        "0x3012") echo "RGGB12" ;;
+        "0x3019") echo "BGGR14" ;;
+        "0x301b") echo "GRBG14" ;;
+        "0x301a") echo "GBRG14" ;;
+        "0x301c") echo "RGGB14" ;;
+        "0x301d") echo "BGGR16" ;;
+        "0x301f") echo "GR16" ;;
+        "0x301e") echo "GB16" ;;
+        "0x3020") echo "RG16" ;;
+        *) echo "" ;;
+    esac
 }
 get_pixelformat_fourcc() {
     local videodev=$1
 
     v4l2-ctl --device=$videodev --get-fmt-video | grep "Pixel Format" | awk -F "'" '{print $2}'
 
+}
+
+# Check if media-controller API is supported for format changes
+check_mediactl_support() {
+    local subdev=$1
+    
+    # Try to set the current format back to itself as a test
+    local current_code=$(v4l2-ctl -d "$subdev" --get-subdev-fmt pad=0 2>/dev/null | grep "Mediabus Code" | awk '{print $4}')
+    
+    if [ -z "$current_code" ]; then
+        # Can't even read subdev format, media-controller not supported
+        return 1
+    fi
+    
+    # Try to set the format using v4l2-ctl
+    if v4l2-ctl -d "$subdev" --set-subdev-fmt pad=0,code="$current_code" 2>&1 | grep -q "Operation not permitted"; then
+        # EPERM means immutable links or no media-controller support
+        return 1
+    fi
+    
+    return 0
 }
 
 # Function to get stored configuration for a device
@@ -476,6 +524,8 @@ set_format() {
 
     local videodev=$1      
     local mediabusfmt=$2
+    local subdev=$3
+    local user_selected_fmt=$4
         
     for mediadev in /dev/media*; do
         echo "Checking $mediadev..."
@@ -491,36 +541,91 @@ set_format() {
         if media-ctl -d "$mediadev" -p | grep -q "$videodev"; then
             echo "Found $videodev on $mediadev"
             
+            # Check if media-controller API is supported
+            if check_mediactl_support "$subdev"; then
+                echo "Media-controller API supported, using media-ctl method"
+                
+                # Use media-ctl method
+                media-ctl -d "$mediadev" -r
+                entity_name=$(get_entity_name $mediadev)
+                resolution=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
+                width=$(echo $resolution | awk -F 'x' '{ print $1 }')
+                height=$(echo $resolution | awk -F 'x' '{ print $2 }')
+                format="$mediabusfmt/$resolution"
 
-            media-ctl -d "$mediadev" -r
+                media-ctl -d "$mediadev" -V "'vc_mipi_camera $entity_name':0 [fmt:$format field:none colorspace:srgb]"
 
-            entity_name=$(get_entity_name $mediadev)
+                new_format=$(get_format_entity $subdev)
+                echo "New format: '$new_format'"
+                if([ "$new_format" != "$format" ]); then
+                    echo "Failed to set format to $mediabusfmt"
+                    whiptail --msgbox "Failed to set format to $mediabusfmt Format is probably not supported by sensor" 8 40 --ok-button "OK" --title "Error" 
+                    sleep 1                
+                    return
+                fi
 
-            resolution=$(v4l2-ctl -d $subdev --get-subdev-fmt | grep Width | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
-            width=$(echo $resolution | awk -F 'x' '{ print $1 }')
-            height=$(echo $resolution | awk -F 'x' '{ print $2 }')
-            format="$mediabusfmt/$resolution"
+                mediabus_code=$(get_mediabus_code $subdev )
+                fmt=$(map_mediabus_to_fourcc $mediabus_code)
 
-            media-ctl -d "$mediadev" -V "'vc_mipi_camera $entity_name':0 [fmt:$format field:none colorspace:srgb]"
-
-            new_format=$(get_format_entity $subdev)
-            echo "New format: '$new_format'"
-            if([ "$new_format" != "$format" ]); then
-                echo "Failed to set format to $mediabusfmt"
-                whiptail --msgbox "Failed to set format to $mediabusfmt Format is probably not supported by sensor" 8 40 --ok-button "OK" --title "Error" 
-                sleep 1                
-                return
+                v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb 
+            else
+                echo "Media-controller API not supported, using direct video device method"
+                
+                # Get current resolution from video device
+                resolution=$(v4l2-ctl -d $videodev --get-fmt-video | grep 'Width/Height' | awk -F ' ' '{ print $3 }' | tr '/' 'x' | xargs echo -n)
+                width=$(echo $resolution | awk -F 'x' '{ print $1 }')
+                height=$(echo $resolution | awk -F 'x' '{ print $2 }')
+                
+                # If user provided their selected format, use it directly
+                # Otherwise convert mediabus format name to FourCC for video device
+                if [ -n "$user_selected_fmt" ]; then
+                    fmt="$user_selected_fmt"
+                    echo "Using user-selected format: $fmt"
+                else
+                    case "$mediabusfmt" in
+                        "Y8_1X8") fmt="GREY" ;;
+                        "Y10_1X10") fmt="Y10P" ;;
+                        "Y12_1X12") fmt="Y12P" ;;
+                        "Y14_1X14") fmt="Y14P" ;;
+                        "Y16_1X16") fmt="Y16 " ;;
+                        "SBGGR8_1X8") fmt="BA81" ;;
+                        "SGRBG8_1X8") fmt="GRBG" ;;
+                        "SGBRG8_1X8") fmt="GBRG" ;;
+                        "SRGGB8_1X8") fmt="RGGB" ;;
+                        "SBGGR10_1X10") fmt="pBAA" ;;
+                        "SGRBG10_1X10") fmt="pgAA" ;;
+                        "SGBRG10_1X10") fmt="pGAA" ;;
+                        "SRGGB10_1X10") fmt="pRAA" ;;
+                        "SBGGR12_1X12") fmt="pBCC" ;;
+                        "SGRBG12_1X12") fmt="pgCC" ;;
+                        "SGBRG12_1X12") fmt="pGCC" ;;
+                        "SRGGB12_1X12") fmt="pRCC" ;;
+                        *) 
+                            echo "Unknown format: $mediabusfmt"
+                            whiptail --msgbox "Unknown format: $mediabusfmt" 8 40 --ok-button "OK" --title "Error"
+                            return
+                            ;;
+                    esac
+                fi
+                
+                echo "Setting video device format to: $fmt (${width}x${height})"
+                
+                # Set format directly on video device
+                if ! v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat="$fmt",colorspace=srgb; then
+                    echo "Failed to set format to $fmt"
+                    whiptail --msgbox "Failed to set format to $fmt. Format is probably not supported by sensor" 8 40 --ok-button "OK" --title "Error" 
+                    sleep 1                
+                    return
+                fi
+                
+                # Verify the format was set
+                current_fmt=$(v4l2-ctl -d "$videodev" --get-fmt-video | grep "Pixel Format" | awk -F "'" '{print $2}')
+                echo "Current format: $current_fmt"
             fi
-
-            mediabus_code=$(get_mediabus_code $subdev )
-            fmt=$(map_mediabus_to_fourcc $mediabus_code)
-
-            v4l2-ctl -d "$videodev" --set-fmt-video=width=$width,height=$height,pixelformat=$fmt,colorspace=srgb 
-
-    v4l2-ctl --verbose  --stream-mmap --device=$videodev --stream-count=3
-    sleep 2        
-    
-                                   
+            
+            # Test with a few frames
+            v4l2-ctl --verbose --stream-mmap --device=$videodev --stream-count=3
+            sleep 2
            
             return
         fi
@@ -531,6 +636,7 @@ set_format_unpacked() {
 
     local videodev=$1
     local mediabusfmt=$2
+    local subdev=$3
         
     for mediadev in /dev/media*; do        
         # Skip if not a valid media device
@@ -544,8 +650,6 @@ set_format_unpacked() {
         # Check if this media device has video0
         if media-ctl -d "$mediadev" -p | grep -q "$videodev"; then
             echo "Found $videodev on $mediadev"
-            
-            subdev=$(media-ctl -d "$mediadev" -p | grep "vc_mipi_camera" -A  2  | grep "device node name" | awk -F ' ' '{ print $4 }')
 
             media-ctl -d "$mediadev" -r
 
@@ -665,7 +769,8 @@ dialog_set_format()
 
     declare -A format_map
     format_map=(
-        ["Y8 "]="Y8_1X8"      
+        ["Y8"]="Y8_1X8"
+        ["GREY"]="Y8_1X8"      
         ["BGGR8"]="SBGGR8_1X8"
         ["GRBG8"]="SGRBG8_1X8"
         ["GBRG8"]="SGBRG8_1X8"
@@ -709,6 +814,7 @@ dialog_set_format()
 
        menu_options_format=(
         "Y8" "Greyscale 8-bit"
+        "GREY" "Greyscale 8-bit"
         "Y10 " "Greyscale 10-bit"
         "Y10P" "Greyscale 10-bit packed"
         "Y12 " "Greyscale 12-bit"
@@ -862,11 +968,13 @@ dialog_set_format()
     echo "Selected format: $full_mediabusfmt"
 
 
-    if [[ -n "$mediabusfmt" && -v packed_map[$mediabusfmt] ]]; then
+    # Check if unpacked format is requested and media-controller is supported
+    if [[ -n "$mediabusfmt" && -v packed_map[$mediabusfmt] ]] && check_mediactl_support "$subdev"; then
         echo "Selected format {$mediabusfmt} is unpacked, output set to corresponding unpacked format." >&2
-        set_format_unpacked "$videodev" "$full_mediabusfmt"
+        set_format_unpacked "$videodev" "$full_mediabusfmt" "$subdev"
     else
-        set_format "$videodev" "$full_mediabusfmt"
+        # Use regular format path, passing user's selected format so packed vs unpacked is respected
+        set_format "$videodev" "$full_mediabusfmt" "$subdev" "$mediabusfmt"
     fi
 
     if whiptail --yesno "Persist the selected format so it is applied automatically at boot for this camera?" 10 80 --title "Persist format"; then
@@ -877,8 +985,9 @@ dialog_set_format()
             entity_name=$(media-ctl -d "$mediadev" -p | grep -B 3 "$subdev" | grep entity | awk -F ': ' '{ print $2 }' | awk '{ print $1, $2 }')
             sanitized_entity=$(tr -cs 'a-zA-Z0-9._-' '_' <<<"$entity_name")
             
-            # Get the current pixelformat that would be used
-            subdev_format=$(get_mediabus_code_string "$subdev")
+            # Use the selected format short name (what user chose from menu)
+            # This is the clean format name like "Y8", "GREY", "Y10P", etc.
+            subdev_format="$mediabusfmt"
 
             video_format=$(get_pixelformat_fourcc "$videodev")
            {
