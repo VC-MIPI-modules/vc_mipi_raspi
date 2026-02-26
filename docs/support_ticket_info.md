@@ -7,7 +7,11 @@ For a quick summary, you can run the export script under the next section or do 
 
 ## Complete Support Package
 
-You can create a complete support package by running:
+You can create a complete support package by running the following section
+
+<details>
+
+<summary>Script for exporting</summary>
 
 ```bash
 #!/bin/bash
@@ -132,6 +136,7 @@ Save this script, make it executable, and run it:
 chmod +x collect_support_info.sh
 ./collect_support_info.sh
 ```
+</details>
 
 ## 1. Hardware Information
 
@@ -420,13 +425,20 @@ done
 
 ### I2C Detection
 
-Check if camera is detected on I2C bus:
+The correct I2C bus number can be read directly from `dmesg`. The device identifier before the colon shows `<bus>-<address>`, so `10-001a` means the camera is expected on **bus 10** at address `0x1a`:
+
+```
+[    5.313824] vc_mipi_camera 10-001a: vc_mod_setup(): Unable to get module I2C client for address 0x10
+[    5.313853] vc_mipi_camera 10-001a: probe with driver vc_mipi_camera failed with error -5
+```
+
+Use that bus number with `i2cdetect` to check if the sensor is physically reachable:
 
 ```bash
 sudo i2cdetect -y 10
 ```
 
-(Bus number may vary: typically 0, 1, 10, or 11 depending on CSI port and Pi model)
+(Bus number may vary: typically 0, 1, 10, or 11 depending on CSI port and Pi model. Always check `dmesg` first to confirm the expected bus.)
 
 ## 8. Test Streaming Attempt
 
