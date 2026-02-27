@@ -72,7 +72,10 @@ sudo ldconfig
 ```shell
 gst-launch-1.0 libcamerasrc  !      video/x-raw,colorimetry=bt709,format=NV12,width=1280,height=1080,framerate=10/1 !      queue ! jpegenc ! multipartmux !      tcpserversink host=0.0.0.0 port=5000
 ```
-
+On the host system, install Gstreamer and connect by this to raspi5 (Works on Windows, Linux)
+```
+gst-launch-1.0 tcpclientsrc host=<IP OR RASPI> port=5000 ! multipartdemux ! jpegdec ! autovideosink 
+```
 # Disclaimer
 The support is still in beta version and can contain some issues. 
 The images are color corrected, but a calibration with the used lenses may be needed.
