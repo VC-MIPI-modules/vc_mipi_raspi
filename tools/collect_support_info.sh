@@ -1,5 +1,17 @@
 #!/bin/bash
-# Create support info bundle
+# Collect diagnostic information for VC MIPI camera support tickets.
+#
+# PRIVACY NOTICE (GDPR/DSGVO):
+# This script collects technical diagnostic data from your system, which may
+# include information considered personal data under GDPR, such as:
+#   - Board serial number and MAC addresses (from /proc/cpuinfo, dmesg)
+#   - Hostname and IP addresses (from kernel logs)
+#   - Bluetooth device addresses (from kernel logs)
+#
+# All data is saved locally to a folder in your home directory.
+# Nothing is transmitted automatically. You decide whether to share
+# the resulting archive when submitting a support ticket.
+# By running this script you consent to collecting this diagnostic data.
 
 OUTDIR="$HOME/vc_mipi_support_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$OUTDIR"
@@ -216,3 +228,12 @@ else
     echo "Please create it manually with:"
     echo "  cd \$HOME && tar -czf $(basename $OUTDIR).tar.gz $(basename $OUTDIR)"
 fi
+
+echo ""
+echo "PRIVACY NOTICE (GDPR/DSGVO):"
+echo "  The archive may contain personal data such as:"
+echo "    - Board serial number and MAC addresses (from /proc/cpuinfo, dmesg)"
+echo "    - Hostname and IP addresses (from kernel logs)"
+echo "    - Bluetooth device addresses (from kernel logs)"
+echo "  Nothing has been transmitted. You decide whether to share"
+echo "  the archive when submitting a support ticket."
