@@ -29,12 +29,14 @@
 ### -----+------------------------------------------------------------------------------------------
 ### Omnivision (OV7251,OV9281)    => cam0_manu_ov
 ### Sony(IMX...       )           => cam0_manu_sony
-
+### Force a mono sensor to output Bayer/color mbus codes (e.g. IMX900C), only for color simulation, not for production meant!
+### => cam0_force_color
 
 dtoverlay=vc-mipi-bcm2712-cam0
 dtparam=cam0_lanes4
 dtparam=cam0_manu_sony
 dtparam=cam0_libcamera_off
+#dtparam=cam0_force_color
 
 ################################################################################
 # cam1 #########################################################################
@@ -56,11 +58,15 @@ dtparam=cam0_libcamera_off
 ### -----+------------------------------------------------------------------------------------------
 ### Omnivision (OV7251,OV9281)    => cam1_manu_ov
 ### Sony(IMX...       )           => cam1_manu_sony
+### Force a mono sensor to output Bayer/color mbus codes (e.g. IMX900C), only for color simulation, not for production meant!
+### => cam1_force_color
 
 dtoverlay=vc-mipi-bcm2712-cam1
 dtparam=cam1_lanes4
 dtparam=cam1_manu_sony
 dtparam=cam1_libcamera_off
+#dtparam=cam1_force_color
+
 
 ################################################################################
 # memory #######################################################################
