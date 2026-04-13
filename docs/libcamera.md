@@ -28,17 +28,13 @@ sudo apt install -y libtiff-dev qt6-base-dev qt6-tools-dev-tools
 sudo apt install -y meson cmake
 sudo apt install -y libglib2.0-dev libgstreamer-plugins-base1.0-dev
 sudo apt install -y  libboost-program-options-dev libdrm-dev libexif-dev
-git clone https://github.com/VC-MIPI-modules/libpisp
-cd libpisp
-meson setup build
-meson compile -C build
-sudo meson install -C build
+sudo apt install -y libpisp-dev
 ```
 
 ## 2.Install forked version of libcamera
 
 ```shell 
-git clone https://github.com/VC-MIPI-modules/libcamera
+git clone --branch update-to-v0.7.0 https://github.com/VC-MIPI-modules/libcamera
 cd libcamera
 meson setup build --buildtype=release -Dpipelines=rpi/vc4,rpi/pisp -Dipas=rpi/vc4,rpi/pisp -Dv4l2=true -Dgstreamer=enabled -Dtest=false -Dlc-compliance=disabled -Dcam=enabled -Dqcam=disabled -Ddocumentation=disabled -Dpycamera=enabled --prefix=/usr
 sudo ninja -C build install
@@ -46,14 +42,7 @@ sudo ninja -C build install
 
 ## 3.Install rpi cam apps
 ```shell
-git clone https://github.com/raspberrypi/rpicam-apps.git
-cd rpicam-apps
-git checkout v1.5.2
-meson setup build  --buildtype=release --prefix=/usr -Ddownload_hailo_models=false -Ddownload_imx500_models=false -Denable_imx500=false
-meson compile -C build
-sudo meson install -C build
-echo "/usr/local/lib/aarch64-linux-gnu" > /etc/ld.so.conf.d/rpicam.conf
-sudo ldconfig
+sudo apt install -y rpicam-apps
 ```
 
 ## 4.Enable libcamera support for vc mipi
@@ -62,6 +51,32 @@ sudo ldconfig
 2. Enable support for each port individually
 3. Path ```Configure Device Tree > cam0/1 > Lanes Configuration > Manufacturer Selection > Libcamera Support ```
 4. Reboot system
+
+# Known sensor-specific notes
+
+## IMX900 — ISP line length warning
+When using the IMX900, libcamera prints the following error on startup:
+
+```
+ERROR IPARPI ipa_base.cpp:589 Sensor minimum line length of 4.55us (449.99 MPix/s) is below the minimum allowable ISP limit of 5.39us (380 MPix/s)
+ERROR IPARPI ipa_base.cpp:595 THIS WILL CAUSE IMAGE CORRUPTION!!! Please update the camera sensor driver to allow more horizontal blanking control.
+```
+
+This is **expected behavior** for the IMX900. The sensor's HMAX register is fixed and cannot be changed, so the horizontal blanking is reported as read-only. The ISP warning can be safely ignored — images are not corrupted in practice.
+
+## IMX412 — 2-lane mode required
+The IMX412 must be configured to run in **2-lane mode** when used with libcamera.
+
+## Raspberry Pi 5 — H.264 encoding
+The Raspberry Pi 5 has no hardware H.264 encoder. When running `rpicam-vid`, the default H.264 codec will fail with:
+```
+ERROR: *** Unable to find an appropriate H.264 codec ***
+```
+Use software encoding via libav instead:
+```shell
+rpicam-vid -t 10000 --codec libav --libav-video-codec h264 -o output.mp4
+```
+This requires rpicam-apps to be built with `-Denable_libav=enabled` (included in the build command above) and the `libavcodec-dev` packages installed.
 
 # Adjustments for support
 1. The exposure values are not in mikroseconds anymore. 

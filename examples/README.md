@@ -8,8 +8,27 @@ This directory contains Python examples for capturing raw frames from VC MIPI ca
 |--------|--------|-------------|
 | **Y10** (10-bit) | `capture_y10.py` | 10-bit unpacked to 16-bit, high dynamic range |
 | **GREY** (8-bit) | `capture_grey.py` | Standard 8-bit greyscale |
+| **Gain test** | `gain_effect_test.py` | Checks measured brightness ratio against expected gain ratio |
 
 Both scripts use direct V4L2 API (no OpenCV) for proper raw format handling.
+
+## Gain Effect Test
+
+Use `gain_effect_test.py` when you want to verify that changing analogue gain actually changes raw brightness by the expected ratio.
+
+Recommended setup:
+
+```bash
+source venv/bin/activate
+v4l2-ctl -d /dev/video0 --set-fmt-video=width=3072,height=2048,pixelformat=Y10
+python3 gain_effect_test.py --device /dev/video0 --subdev /dev/v4l-subdev2 \
+    --gains 0 6000 12000 18000 --exposure 10000 --blacklevel 0
+```
+
+Notes:
+- `--blacklevel 0` is recommended for gain-ratio testing because black offset compresses the measured ratio.
+- The script measures a center ROI and subtracts a low-percentile floor before computing the ratio.
+- A gain step of about `6000 mdB` corresponds to about `2x` signal.
 
 ## Installation
 
