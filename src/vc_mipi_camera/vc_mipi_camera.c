@@ -249,10 +249,18 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
                 vc_sen_set_hmax(cam);
                 return 0;
                 
-        case V4L2_CID_VBLANK:
-                vc_core_set_vmax_overwrite(cam, cam->ctrl.frame.height + control->value);
+        case V4L2_CID_VBLANK: {
+                /* Use the active (crop) height, not the full sensor native height.
+                 * vblank is always expressed as (VMAX - active_height), so VMAX must
+                 * be reconstructed with the same active_height used when the range
+                 * was reported (see vblank.min/max/def calculation above). */
+                u32 active_height = cam->state.frame.height > 0
+                                    ? cam->state.frame.height
+                                    : cam->ctrl.frame.height;
+                vc_core_set_vmax_overwrite(cam, active_height + control->value);
                 vc_sen_write_vmax(&cam->ctrl, cam->state.vmax_overwrite);
                 return 0;
+        }
         case V4L2_CID_HFLIP:
         case V4L2_CID_VFLIP:
                 return 0; // Currently not planned to be implemented

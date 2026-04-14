@@ -32,3 +32,9 @@ build/
 *.tar.gz
 
 .env
+
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+*.egg-info/
