@@ -250,9 +250,9 @@ configure_device_tree() {
 
         # Use whiptail to create a menu for selecting the number of lanes
         lanes=$(whiptail --menu "Select the number of lanes:" 15 200 3 --default-item "$current_lanes" --cancel-button "Cancel"\
-        "1" "1 lane (i.e. OV7251, IMX296, IMX297)" \
-        "2" "2 lanes (i.e.  OV9281, IMX264, IMX265, IMX178, IMX183, IMX226, IMX250, IMX252, IMX273, IMX290, IMX327, IMX335, IMX392)" \
-        "4" "4 lanes (i.e. IMX178, IMX183, IMX226, IMX250, IMX252, IMX273, IMX290,  IMX327, IMX335, IMX392, IMX412, IMX415, IMX462, IMX565, IMX566, IMX567, IMX568, IMX900)" 3>&1 1>&2 2>&3)
+        "1" "1 lane  (i.e. OV7251, IMX296, IMX297)" \
+        "2" "2 lanes (i.e. OV9281, IMX264, IMX265, IMX178, IMX183, IMX226, IMX250, IMX252, IMX273, IMX290, IMX327, IMX335, IMX392)" \
+        "4" "4 lanes (i.e. OV9281L, IMX178, IMX183, IMX226, IMX250, IMX252, IMX273, IMX290,  IMX327, IMX335, IMX392, IMX412, IMX415, IMX462, IMX565, IMX566, IMX567, IMX568, IMX900)" 3>&1 1>&2 2>&3)
         if [ $? -ne 0 ]; then
             break
         fi 

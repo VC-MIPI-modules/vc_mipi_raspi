@@ -1016,13 +1016,18 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
         u32 data_rate_mbps = (*(__u32 *)mode_desc->data_rate) / 1000000;
 
         /* CSI-2 DDR: serial bit rate per lane = data_rate_mbps.
-         * Link frequency = serial bit rate / 2 (both edges of clock used). */
-        linkfreq.max = (u64)data_rate_mbps * 1000000ULL / 2;
+         * Link frequency = serial bit rate / 2 (both edges of clock used).
+         * If ctrl->link_freq is set, it overrides the value from ROM data_rate. */
+        if (cam->ctrl.link_freq != 0) {
+                linkfreq.max = cam->ctrl.link_freq;
+        } else {
+                linkfreq.max = (u64)data_rate_mbps * 1000000ULL / 2;
+        }
         linkfreq.def = linkfreq.max;
         linkfreq.min = linkfreq.max;
 
-        /* Pixel rate = (data_rate_per_lane * num_lanes) / bits_per_pixel */
-        pixel_rate.max = (u32)((u64)data_rate_mbps * num_lanes / bit_depth * 1000000);
+        /* Pixel rate = link_freq * 2 * num_lanes / bits_per_pixel */
+        pixel_rate.max = (u32)(linkfreq.max * 2 * num_lanes / bit_depth);
         pixel_rate.def = pixel_rate.max;
 
 
@@ -1231,10 +1236,26 @@ static int vc_sd_init(struct vc_device *device)
         if(device->libcamera_enabled)
         {
                 device->cam.ctrl.exposure.min = 1;
-                device->cam.ctrl.exposure.max = 1000000;
-                device->cam.ctrl.exposure.def = 10;
+                if (device->cam.ctrl.exposure.max == 0) {
+                        device->cam.ctrl.exposure.max = 1000000;
+                        device->cam.ctrl.exposure.def = 10000;
+                }
         }
-     
+        else
+        {
+                /* If the sensor ROM reports exposure.max == 0 (e.g. EXT.TRG modes),
+                 * v4l2_ctrl_new_std will reject any def != 0.  Use safe defaults. */
+                if (device->cam.ctrl.exposure.max == 0) {
+                        device->cam.ctrl.exposure.min = 1;
+                        device->cam.ctrl.exposure.max = 1000000;
+                        device->cam.ctrl.exposure.def = 10000;
+                } else {
+                        /* Clamp def into [min, max] to prevent ctrl init failure */
+                        device->cam.ctrl.exposure.def = clamp(device->cam.ctrl.exposure.def,
+                                device->cam.ctrl.exposure.min,
+                                device->cam.ctrl.exposure.max);
+                }
+        }
 
 
         // Add controls
