@@ -2,7 +2,7 @@
 
 # Check and install required build dependencies
 echo "Checking build dependencies..."
-REQUIRED_PACKAGES="debhelper dh-dkms"
+REQUIRED_PACKAGES="debhelper dh-dkms dkms"
 MISSING_PACKAGES=""
 
 for pkg in $REQUIRED_PACKAGES; do
@@ -39,15 +39,19 @@ modules=("bcm2712" "bcm2711" "bcm2837" "vccmi10" "rp3a0")
 
 
 # Set version if not set
-if [ -z "$VERSION_DEB_PACKAGE" ]; then
-    export VERSION_DEB_PACKAGE="0.6.11"
+# Pre-release suffix uses Debian tilde convention: ~alpha1 < ~rc1 < (release)
+# Leave VERSION_PRE_RELEASE empty for a final release.
+if [ -z "$VERSION_BASE" ]; then
+    export VERSION_BASE="0.6.12"
 fi
-if [ -z "$VERSION_CORE" ]; then
-    export VERSION_CORE="0.6.11"
+if [ -z "$VERSION_PRE_RELEASE" ]; then
+    export VERSION_PRE_RELEASE="~alpha1"
 fi
 
 # Delete v from version
-export VERSION_DEB_PACKAGE=$(echo $VERSION_DEB_PACKAGE | sed 's/v//')
+export VERSION_BASE=$(echo "$VERSION_BASE" | sed 's/^v//')
+export VERSION_DEB_PACKAGE="${VERSION_BASE}${VERSION_PRE_RELEASE}"
+export VERSION_CORE="${VERSION_DEB_PACKAGE}"
 
 VC_CAMERA_FILE="src/vc_mipi_camera/vc_mipi_camera.c"
 VC_CORE_FILE="src/vc_mipi_core/vc_mipi_core.h"
@@ -81,7 +85,7 @@ for module in "${modules[@]}"; do
 
     export MODULE_VERSION=$module
 
-    BUILD_DIR="build/build-$module"
+    BUILD_DIR="build/vc-mipi-driver-$module-${VERSION_DEB_PACKAGE}"
     echo "DIR: $BUILD_DIR"
     SRC_DEB_DIR="debian_package/debian_package-$module"
     SRC_SCRIPT_DIR="scripts/$module"
