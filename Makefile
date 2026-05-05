@@ -18,7 +18,18 @@ installDeps:
 	sudo apt install -y libopencv-dev
 
 installLibPisp:
-	sudo apt install -y libpisp-dev
+	@if dpkg-query -W libpisp-dev 2>/dev/null | grep -q libpisp-dev; then \
+		echo "libpisp-dev is available in package manager, installing..."; \
+		sudo apt install -y libpisp-dev; \
+	else \
+		echo "libpisp-dev not available, building from source..."; \
+		cd /tmp && rm -rf /tmp/libpisp && \
+		git clone https://github.com/raspberrypi/libpisp.git && \
+		cd libpisp && \
+		meson setup build --buildtype=release --prefix=/usr && \
+		meson compile -C build && \
+		sudo ninja -C build install; \
+	fi
 	sudo rm -rf /usr/local/include/libpisp \
 	            /usr/local/lib/aarch64-linux-gnu/libpisp.so* \
 	            /usr/local/lib/aarch64-linux-gnu/libpisp.a \
