@@ -137,10 +137,10 @@ static void vc_init_supported_mbus_codes(struct vc_device *device)
                                 {
                                         vc_dbg(dev, "%s(): Skipping unsupported mbus code: 0x%04x\n", __func__, cam->ctrl.mbus_codes[i]);
                                         goto skip_code;
-                                }
+    }
                                 
 
-                        }
+        }
                 }
                 vc_notice(dev, "%s(): Adding mbus code: 0x%04x\n", __func__, cam->ctrl.mbus_codes[i]);                
                 device->supported_mbus_codes[counter] = cam->ctrl.mbus_codes[i];
@@ -229,7 +229,7 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
         struct vc_device *device = to_vc_device(sd);
         int ret = 0;
         vc_mode *mode = vc_get_mode(cam);
-        int num_lanes = mode->num_lanes;
+        int num_lanes = mode ? mode->num_lanes : 0;
         switch (control->id)
         {
 
@@ -243,7 +243,9 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
                                 pixel_rate.max);
                         vc_core_set_hmax_overwrite(cam, new_hmax);
                 } else {
-                        vc_core_set_hmax_overwrite(cam, mode->hmax.def + (control->value & ~num_lanes) / num_lanes);
+                        /* Align hblank to lane boundary (num_lanes is power of 2) */
+                        u32 aligned_hblank = control->value & ~(num_lanes - 1);
+                        vc_core_set_hmax_overwrite(cam, mode->hmax.def + aligned_hblank / num_lanes);
                 }
                 vc_notice(dev, "%s(): Set HBLANK: %d\n", __func__, control->value);
                 vc_sen_set_hmax(cam);
@@ -309,7 +311,7 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
 
 
         default:
-                vc_warn(dev, "%s(): Unkown control 0x%08x\n", __func__, control->id);
+                vc_warn(dev, "%s(): Unknown control 0x%08x\n", __func__, control->id);
                 return -EINVAL;
         }
 
@@ -409,14 +411,10 @@ static int vc_sd_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state
         struct vc_cam *cam = to_vc_cam(sd);
         struct v4l2_mbus_framefmt *mf = &format->format;
 
-        
         mutex_lock(&device->mutex);
-        
 
-
-        vc_core_set_format(cam, mf->code);
-        // TODO vc_core_set_frame(cam, mf->top, mf->left, mf->width, mf->height);
-        vc_core_set_frame(cam, 0, 0, mf->width, mf->height);
+	vc_core_set_format(cam, mf->code);
+	vc_core_set_frame(cam, 0, 0, mf->width, mf->height);
         mf->field = V4L2_FIELD_NONE;
         mf->colorspace = V4L2_COLORSPACE_SRGB;
 
@@ -518,13 +516,13 @@ static int vc_sd_get_selection(struct v4l2_subdev *sd,
                 sel->r.width = frame->width;
                 sel->r.height = frame->height;
                 break;
-        case V4L2_SEL_TGT_CROP_DEFAULT:
-        case V4L2_SEL_TGT_CROP_BOUNDS:
-                sel->r.left = frame_bounds->left;
-                sel->r.top = frame_bounds->top;
-                sel->r.width = frame_bounds->width;
-                sel->r.height = frame_bounds->height;
-                break;
+	case V4L2_SEL_TGT_CROP_DEFAULT:
+	case V4L2_SEL_TGT_CROP_BOUNDS:
+		sel->r.left = 0;
+		sel->r.top = 0;
+		sel->r.width = frame_bounds->width;
+		sel->r.height = frame_bounds->height;
+		break;
         }
 
         mutex_unlock(&device->mutex);
@@ -565,7 +563,7 @@ int vc_ctrl_s_ctrl(struct v4l2_ctrl *ctrl)
         if (!pm_runtime_get_if_in_use(&client->dev))
         {
                 vc_err(&client->dev, "%s(): Device is powered off, cannot set control 0x%08x\n", __func__, ctrl->id);
-                return 0;
+                return -ENODEV;
 
         }
 
@@ -583,7 +581,7 @@ static int vc_ctrl_g_volatile_ctrl(struct v4l2_ctrl *ctrl)
         struct vc_device *device = container_of(ctrl->handler, struct vc_device, ctrl_handler);
         struct vc_cam *cam = &device->cam;
         if (ctrl->id == V4L2_CID_VC_NAME) {
-                strscpy(ctrl->p_new.p_char, device->cam.desc.sen_type, ctrl->maximum);
+                strscpy(ctrl->p_new.p_char, device->cam.desc.sen_type, ctrl->maximum + 1);
                 return 0;
         }
         if (ctrl->id == V4L2_CID_LIVE_ROI) {
@@ -602,16 +600,12 @@ static int vc_get_bit_depth(__u8 mipi_format)
         {
         case FORMAT_RAW08:
                 return 8;
-                break;
         case FORMAT_RAW10:
                 return 10;
-                break;
         case FORMAT_RAW12:
                 return 12;
-                break;
         case FORMAT_RAW14:
                 return 14;
-                break;
         default:;
                 break;
         }
@@ -820,7 +814,7 @@ static const struct v4l2_ctrl_config ctrl_rotation = {
     .id = V4L2_CID_CAMERA_SENSOR_ROTATION,
     .name = "Sensor rotation",
     .type = V4L2_CTRL_TYPE_INTEGER,
-    .flags = V4L2_CTRL_FLAG_EXECUTE_ON_WRITE & V4L2_CTRL_FLAG_MODIFY_LAYOUT ,
+    .flags = V4L2_CTRL_FLAG_EXECUTE_ON_WRITE | V4L2_CTRL_FLAG_MODIFY_LAYOUT ,
     .min = 0,
     .max = 360,
     .step = 1,
@@ -904,7 +898,7 @@ static const struct v4l2_ctrl_config ctrl_binning_mode = {
     .id = V4L2_CID_VC_BINNING_MODE,
     .name = "Binning Mode",
     .type = V4L2_CTRL_TYPE_INTEGER,
-    .flags = V4L2_CTRL_FLAG_EXECUTE_ON_WRITE & V4L2_CTRL_FLAG_MODIFY_LAYOUT ,
+    .flags = V4L2_CTRL_FLAG_EXECUTE_ON_WRITE | V4L2_CTRL_FLAG_MODIFY_LAYOUT ,
     .min = 0,
     .max = 4,
     .step = 1,
@@ -976,18 +970,6 @@ static struct v4l2_ctrl_config ctrl_vblank = {
 
 
 
-struct v4l2_subdev_format fmt = {
-        .which = V4L2_SUBDEV_FORMAT_ACTIVE,
-        .format = {
-        .width = 0,
-        .height = 0,
-        .code = 0,
-        .field = V4L2_FIELD_NONE,
-        .colorspace = V4L2_COLORSPACE_SRGB,
-        },
-};
-
-
 static vc_mode *vc_get_mode(struct vc_cam *cam)
 {
         struct vc_desc_mode *mode_desc = &cam->desc.modes[cam->state.mode];
@@ -1009,6 +991,8 @@ static vc_mode *vc_get_mode(struct vc_cam *cam)
 static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
 {
         vc_mode *mode = vc_get_mode(cam);
+        if (!mode)
+                return;
         struct vc_desc_mode *mode_desc = &cam->desc.modes[cam->state.mode];
         int num_lanes = mode->num_lanes;
         int bit_depth = vc_get_bit_depth(mode->format);
@@ -1194,13 +1178,16 @@ int vc_sd_update_fmt(struct vc_device *device)
 {
         __u8 h_scale, v_scale;
         vc_get_binning_scale(&device->cam, &h_scale, &v_scale);
-
-        fmt.format.code = device->cam.state.format_code;
-        fmt.format.width = device->cam.ctrl.frame.width / h_scale;
-        fmt.format.height = device->cam.ctrl.frame.height / v_scale;
-
-        // return 0;
-               
+        struct v4l2_subdev_format fmt = {
+                .which = V4L2_SUBDEV_FORMAT_ACTIVE,
+                .format = {
+                        .code = device->cam.state.format_code,
+                        .width = device->cam.ctrl.frame.width / h_scale,
+                        .height = device->cam.ctrl.frame.height / v_scale,
+                        .field = V4L2_FIELD_NONE,
+                        .colorspace = V4L2_COLORSPACE_SRGB,
+                },
+        };
 
         return v4l2_subdev_call(&device->sd, pad, set_fmt, NULL, &fmt);
 }
@@ -1332,50 +1319,52 @@ static int vc_probe(struct i2c_client *client)
     if (ret)
         goto error_handler_free;
 
-    ret = v4l2_async_register_subdev_sensor(&device->sd);
-    if (ret)
-        goto error_media_entity;
-
-    /* Enable runtime PM and take one usage reference */
-    pm_runtime_enable(dev);
-    vc_notice(dev, "%s(): Runtime PM enabled\n", __func__);
-    pm_runtime_get_sync(dev);
-    vc_notice(dev, "%s(): Probe successful\n", __func__);
-    return 0;
-
-error_media_entity:
-    media_entity_cleanup(&device->sd.entity);
-error_handler_free:
-    v4l2_ctrl_handler_free(&device->ctrl_handler);
-    mutex_destroy(&device->mutex);
-error_power_off:
-    pm_runtime_disable(dev);
-    pm_runtime_set_suspended(dev);
-    vc_set_power(device, 0);
-    return ret;
-}
-
-static void vc_remove(struct i2c_client *client)
-{
-    struct v4l2_subdev *sd = i2c_get_clientdata(client);
-    struct vc_device *device = to_vc_device(sd);
-    struct vc_cam *cam = to_vc_cam(sd);
-
-    v4l2_async_unregister_subdev(&device->sd);
-    media_entity_cleanup(&device->sd.entity);
-    v4l2_ctrl_handler_free(&device->ctrl_handler);
-    mutex_destroy(&device->mutex);
-
-    /* Drop the usage reference taken in probe and disable runtime PM */
-    pm_runtime_get_sync(&client->dev);
-    pm_runtime_disable(&client->dev);
-    pm_runtime_set_suspended(&client->dev);
-    pm_runtime_put_noidle(&client->dev);
-    vc_set_power(device, 0);
-    vc_core_release(&device->cam);
-
-    return;
-}
+     ret = v4l2_async_register_subdev_sensor(&device->sd);
+     if (ret)
+         goto error_media_entity;
+ 
+     /* Enable runtime PM and take one usage reference */
+     pm_runtime_enable(dev);
+     vc_notice(dev, "%s(): Runtime PM enabled\n", __func__);
+     ret = pm_runtime_get_sync(dev);
+     if (ret < 0) {
+             vc_err(dev, "%s(): pm_runtime_get_sync failed: %d\n", __func__, ret);
+             goto error_pm_disable;
+     }
+     vc_notice(dev, "%s(): Probe successful\n", __func__);
+     return 0;
+ 
+ error_media_entity:
+     media_entity_cleanup(&device->sd.entity);
+ error_handler_free:
+     v4l2_ctrl_handler_free(&device->ctrl_handler);
+     mutex_destroy(&device->mutex);
+ error_pm_disable:
+     pm_runtime_disable(dev);
+     pm_runtime_set_suspended(dev);
+     vc_set_power(device, 0);
+     return ret;
+ }
+ 
+ static void vc_remove(struct i2c_client *client)
+ {
+     struct v4l2_subdev *sd = i2c_get_clientdata(client);
+     struct vc_device *device = to_vc_device(sd);
+ 
+     v4l2_async_unregister_subdev(&device->sd);
+     media_entity_cleanup(&device->sd.entity);
+     v4l2_ctrl_handler_free(&device->ctrl_handler);
+     mutex_destroy(&device->mutex);
+ 
+     /* Release probe reference before disabling runtime PM */
+     pm_runtime_put_sync(&client->dev);
+     pm_runtime_disable(&client->dev);
+     pm_runtime_set_suspended(&client->dev);
+     vc_set_power(device, 0);
+     vc_core_release(&device->cam);
+ 
+     return;
+ }
 
 static const struct dev_pm_ops vc_pm_ops = {
     SET_SYSTEM_SLEEP_PM_OPS(vc_suspend, vc_resume)};
