@@ -1,6 +1,11 @@
-.PHONY: all installDeps installLibPisp installLibcamera installRPICamApps installLibcamera-rpi4 installGstreamer installRPICamAppsHailo
-all: installDeps installLibPisp installGstreamer installLibcamera  installRPICamApps
-all-rpi4: installDeps installGstreamer installLibcamera-rpi4  installRPICamApps
+.PHONY: all installDeps installV4l2Utils installLibPisp installLibcamera installRPICamApps installLibcamera-rpi4 installGstreamer installRPICamAppsHailo
+
+# Bookworm (Debian 12) ships FFmpeg 5.x which is too old for the libav encoder (requires 6.0+)
+DEBIAN_CODENAME := $(shell . /etc/os-release 2>/dev/null && echo $$VERSION_CODENAME)
+ENABLE_LIBAV := $(if $(filter bookworm,$(DEBIAN_CODENAME)),disabled,enabled)
+
+all: installDeps installV4l2Utils installLibPisp installGstreamer installLibcamera  installRPICamApps
+all-rpi4: installDeps installV4l2Utils installGstreamer installLibcamera-rpi4  installRPICamApps
 installDeps:
 	@echo "Installing dependencies..."
 	## 1.Install dependencies
@@ -16,6 +21,22 @@ installDeps:
 	sudo apt install -y cmake libboost-program-options-dev libdrm-dev libexif-dev libpng-dev libepoxy-dev
 	sudo apt install -y libavcodec-dev libavformat-dev libswscale-dev libavutil-dev libavdevice-dev
 	sudo apt install -y libopencv-dev
+
+installV4l2Utils:
+ifeq ($(DEBIAN_CODENAME),bookworm)
+	@echo "Bookworm detected: installing v4l-utils from Debian Trixie repository..."
+	sudo rm -f /etc/apt/sources.list.d/raspbian-trixie.list
+	echo "deb [arch=$(shell dpkg --print-architecture)] http://deb.debian.org/debian trixie main" \
+	  | sudo tee /etc/apt/sources.list.d/debian-trixie.list
+	printf 'Package: *\nPin: release n=trixie\nPin-Priority: 100\n' \
+	  | sudo tee /etc/apt/preferences.d/trixie-pin
+	sudo apt-get update
+	echo 'libc6 libraries/restart-without-asking boolean true' | sudo debconf-set-selections
+	sudo apt-get install -y -t trixie v4l-utils
+else
+	@echo "Installing v4l-utils..."
+	sudo apt-get install -y v4l-utils
+endif
 
 installLibPisp:
 	@if dpkg-query -W libpisp-dev 2>/dev/null | grep -q libpisp-dev; then \
@@ -83,7 +104,7 @@ installRPICamApps:
 	cd rpicam-apps && \
 	git fetch --tags && \
 	git checkout v1.11.1 && \
-	meson setup build --buildtype=release -Denable_hailo=disabled -Denable_opencv=enabled  -Denable_egl=enabled -Denable_libav=enabled&& \
+	meson setup build --buildtype=release -Denable_hailo=disabled -Denable_opencv=enabled -Denable_egl=enabled -Denable_libav=$(ENABLE_LIBAV) && \
 	meson compile -C build && \
 	sudo meson install -C build
 	@printf "%s\n" \

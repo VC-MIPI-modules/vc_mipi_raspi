@@ -11,7 +11,7 @@
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-event.h>
 
-#define VERSION_CAMERA "0.6.11"
+#define VERSION_CAMERA "0.6.13"
 
 int debug = 3;
 // --- Prototypes --------------------------------------------------------------
@@ -253,13 +253,14 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
                 
         case V4L2_CID_VBLANK: {
                 /* Use the active (crop) height, not the full sensor native height.
-                 * vblank is always expressed as (VMAX - active_height), so VMAX must
-                 * be reconstructed with the same active_height used when the range
-                 * was reported (see vblank.min/max/def calculation above). */
+                 * vblank is always expressed as (VMAX/scale - active_height), so VMAX
+                 * must be reconstructed with the same scale used when the range was
+                 * reported (see vblank.min/max/def calculation above). */
                 u32 active_height = cam->state.frame.height > 0
                                     ? cam->state.frame.height
                                     : cam->ctrl.frame.height;
-                vc_core_set_vmax_overwrite(cam, active_height + control->value);
+                u32 vmax_scale = (cam->ctrl.flags & FLAG_DOUBLE_HEIGHT) ? 2 : 1;
+                vc_core_set_vmax_overwrite(cam, (active_height + control->value) * vmax_scale);
                 vc_sen_write_vmax(&cam->ctrl, cam->state.vmax_overwrite);
                 return 0;
         }
@@ -972,7 +973,11 @@ static struct v4l2_ctrl_config ctrl_vblank = {
 
 static vc_mode *vc_get_mode(struct vc_cam *cam)
 {
-        struct vc_desc_mode *mode_desc = &cam->desc.modes[cam->state.mode];
+        /* Guard against the sentinel value 0xff set by vc_core_state_init
+         * before a mode is formally selected.  Use ROM mode 0 as the
+         * reference when state.mode is out of range. */
+        __u8 safe_idx = (cam->state.mode < MAX_VC_DESC_MODES) ? cam->state.mode : 0;
+        struct vc_desc_mode *mode_desc = &cam->desc.modes[safe_idx];
         vc_mode *mode = NULL;
 
         for(int i = 0; i < MAX_VC_DESC_MODES; i++)
@@ -985,6 +990,16 @@ static vc_mode *vc_get_mode(struct vc_cam *cam)
                         break;
                 }
         }
+        /* Fallback: if still no match (e.g. ROM mode 0 format/lanes not yet
+         * reflected in ctrl modes), use the first valid ctrl mode. */
+        if (!mode) {
+                for (int i = 0; i < MAX_VC_MODES; i++) {
+                        if (cam->ctrl.mode[i].num_lanes > 0) {
+                                mode = &cam->ctrl.mode[i];
+                                break;
+                        }
+                }
+        }
         return mode;
 }
 
@@ -993,7 +1008,11 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
         vc_mode *mode = vc_get_mode(cam);
         if (!mode)
                 return;
-        struct vc_desc_mode *mode_desc = &cam->desc.modes[cam->state.mode];
+        /* Use the same safe index as vc_get_mode to avoid OOB when state.mode
+         * is still the 0xff sentinel set by vc_core_state_init. */
+        __u8 safe_mode_idx = (cam->state.mode < cam->desc.num_modes)
+                             ? cam->state.mode : 0;
+        struct vc_desc_mode *mode_desc = &cam->desc.modes[safe_mode_idx];
         int num_lanes = mode->num_lanes;
         int bit_depth = vc_get_bit_depth(mode->format);
         /* data_rate is stored in the ROM as a little-endian u32 in bps */
@@ -1022,11 +1041,18 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
                              ? cam->state.frame.height
                              : cam->ctrl.frame.height;
                 u32 vmax_actual;
+                /* FLAG_DOUBLE_HEIGHT sensors (e.g. IMX335, IMX415) count VMAX in
+                 * half-line units: frame_period = VMAX/2 × 1H.  All vblank values
+                 * exposed to V4L2/libcamera must be in output-line units, so divide
+                 * the raw VMAX by 2 before subtracting the active height. */
+                u32 vmax_scale = (cam->ctrl.flags & FLAG_DOUBLE_HEIGHT) ? 2 : 1;
 
-                /* VBLANK control = blanking lines = VMAX - active_height.
-                 * mode->vmax.{min,max} are raw VMAX totals, so subtract height. */
-                vblank.min = mode->vmax.min > height ? mode->vmax.min - height : 0;
-                vblank.max = mode->vmax.max > height ? mode->vmax.max - height : 0;
+                /* VBLANK control = blanking lines = VMAX/scale - active_height.
+                 * mode->vmax.{min,max} are raw VMAX totals, so scale then subtract. */
+                vblank.min = (mode->vmax.min / vmax_scale) > height
+                             ? (mode->vmax.min / vmax_scale) - height : 0;
+                vblank.max = (mode->vmax.max / vmax_scale) > height
+                             ? (mode->vmax.max / vmax_scale) - height : 0;
 
                 if (cam->state.framerate > 0 && cam->ctrl.clk_pixel > 0) {
                         /* frame_period_ns = 1e12 / framerate_mHz */
@@ -1035,12 +1061,14 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
                         u32 period_1H_ns = (u32)div_u64(
                                 (u64)mode->hmax.def * 1000000000ULL,
                                 cam->ctrl.clk_pixel);
+                        /* frame_period / period_1H gives VMAX in sensor units;
+                         * divide by vmax_scale to get output-line total. */
                         vmax_actual = period_1H_ns > 0
-                                      ? frame_period_ns / period_1H_ns
-                                      : mode->vmax.def;
+                                      ? (frame_period_ns / period_1H_ns) / vmax_scale
+                                      : mode->vmax.def / vmax_scale;
                 } else {
-                        /* Native fps — apply crop optimisation */
-                        vmax_actual = mode->vmax.def;
+                        /* Native fps — apply crop optimisation in output-line units */
+                        vmax_actual = mode->vmax.def / vmax_scale;
                         if ((cam->ctrl.flags & FLAG_INCREASE_FRAME_RATE) &&
                             height < cam->ctrl.frame.height)
                                 vmax_actual -= (cam->ctrl.frame.height - height);
@@ -1137,6 +1165,12 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
                 device->hblank_ctrl->default_value = hblank.def;
                 device->hblank_ctrl->val           = hblank.def;
                 device->hblank_ctrl->cur.val       = hblank.def;
+                /* Also propagate the read-only flag so a writable hmax range
+                 * (MODE_HMAX) is correctly exposed after the first set_fmt. */
+                if (mode->hmax.min == mode->hmax.max)
+                        device->hblank_ctrl->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+                else
+                        device->hblank_ctrl->flags &= ~V4L2_CTRL_FLAG_READ_ONLY;
         }
 
         /* Update live V4L2_CID_VBLANK control with the actual vblank. */
@@ -1290,12 +1324,12 @@ static int vc_probe(struct i2c_client *client)
 
     ret = vc_core_init(cam, client);
     if (ret)
-        goto error_power_off;
+        goto error_pm_disable;
 
     ret = vc_check_hwcfg(cam, dev, device); 
 
     if (ret)
-        goto error_power_off;
+        goto error_pm_disable;
 
     cam->force_color_mode = device->force_color_mode;
     if (cam->force_color_mode) {
@@ -1319,9 +1353,13 @@ static int vc_probe(struct i2c_client *client)
     if (ret)
         goto error_handler_free;
 
+    ret = v4l2_subdev_init_finalize(&device->sd);
+    if (ret)
+        goto error_media_entity;
+
      ret = v4l2_async_register_subdev_sensor(&device->sd);
      if (ret)
-         goto error_media_entity;
+         goto error_subdev_cleanup;
  
      /* Enable runtime PM and take one usage reference */
      pm_runtime_enable(dev);
@@ -1334,6 +1372,8 @@ static int vc_probe(struct i2c_client *client)
      vc_notice(dev, "%s(): Probe successful\n", __func__);
      return 0;
  
+ error_subdev_cleanup:
+     v4l2_subdev_cleanup(&device->sd);
  error_media_entity:
      media_entity_cleanup(&device->sd.entity);
  error_handler_free:
@@ -1352,6 +1392,7 @@ static int vc_probe(struct i2c_client *client)
      struct vc_device *device = to_vc_device(sd);
  
      v4l2_async_unregister_subdev(&device->sd);
+     v4l2_subdev_cleanup(&device->sd);
      media_entity_cleanup(&device->sd.entity);
      v4l2_ctrl_handler_free(&device->ctrl_handler);
      mutex_destroy(&device->mutex);
