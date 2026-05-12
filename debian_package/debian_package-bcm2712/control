@@ -3,6 +3,7 @@ Section: kernel
 Priority: optional
 Maintainer: Vision Components <info@vision-components.com>
 Build-Depends: debhelper-compat (= 13), dkms, dh-dkms, debhelper (>= 13), device-tree-compiler
+Standards-Version: 4.6.2
 
 Package: vc-mipi-driver-bcm2712
 Architecture: arm64
