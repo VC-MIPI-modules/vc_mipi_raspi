@@ -1,16 +1,18 @@
 # Installing a newer v4l2-utils on Raspberry Pi OS Bookworm
 
-Raspberry Pi OS Bookworm ships with **v4l2-utils 1.22.1**, but the newer **1.30.1** is available in the Raspbian Trixie repository. This guide shows how to upgrade using APT pinning so only `v4l-utils` and its direct dependencies are pulled from Trixie — the rest of the system stays on Bookworm.
+Raspberry Pi OS Bookworm ships with **v4l2-utils 1.22.1**, but the newer **1.30.1** is available in the Debian Trixie repository. This guide shows how to upgrade using APT pinning so only `v4l-utils` and its direct dependencies are pulled from Trixie — the rest of the system stays on Bookworm.
+
+> **Note:** Only 64-bit (arm64) installations are supported.
 
 ---
 
-## 1. Add the Raspbian Trixie repository
+## 1. Add the Debian Trixie repository
 
 Create a new sources file that adds Trixie at **low priority** (pinned to 100, below the default 500 for Bookworm):
 
 ```bash
-echo "deb [arch=armhf] http://raspbian.raspberrypi.com/raspbian/ trixie main contrib non-free rpi" \
-  | sudo tee /etc/apt/sources.list.d/raspbian-trixie.list
+echo "deb [arch=arm64] http://deb.debian.org/debian trixie main" \
+  | sudo tee /etc/apt/sources.list.d/debian-trixie.list
 ```
 
 ## 2. Pin Trixie to low priority
@@ -44,9 +46,9 @@ v4l-utils:
   Candidate: 1.22.1-5
   Version table:
      1.30.1-1 100
-        100 http://raspbian.raspberrypi.com/raspbian trixie/main armhf Packages
+        100 http://deb.debian.org/debian trixie/main arm64 Packages
  *** 1.22.1-5 500
-        500 http://raspbian.raspberrypi.com/raspbian bookworm/main armhf Packages
+        500 http://deb.debian.org/debian bookworm/main arm64 Packages
 ```
 
 ## 4. Install v4l-utils from Trixie
@@ -82,7 +84,7 @@ media-ctl 1.30.1
   ```
 - To remove the Trixie repository entirely:
   ```bash
-  sudo rm /etc/apt/sources.list.d/raspbian-trixie.list
+  sudo rm /etc/apt/sources.list.d/debian-trixie.list
   sudo rm /etc/apt/preferences.d/trixie-pin
   sudo apt-get update
   ```
