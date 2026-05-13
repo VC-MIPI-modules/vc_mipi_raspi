@@ -45,7 +45,7 @@ if [ -z "$VERSION_BASE" ]; then
     export VERSION_BASE="0.6.12"
 fi
 if [ -z "$VERSION_PRE_RELEASE" ]; then
-    export VERSION_PRE_RELEASE="~alpha1"
+    export VERSION_PRE_RELEASE="~alpha2"
 fi
 
 # Delete v from version
