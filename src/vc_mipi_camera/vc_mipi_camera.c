@@ -1277,6 +1277,9 @@ static int vc_sd_init(struct vc_device *device)
                                 device->cam.ctrl.exposure.max);
                 }
         }
+        if (device->cam.ctrl.static_vmax != 0) {
+                ctrl_vblank.flags |= V4L2_CTRL_FLAG_READ_ONLY;
+        }
 
 
         // Add controls
