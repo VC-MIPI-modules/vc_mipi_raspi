@@ -347,17 +347,18 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
                         goto err_unlock;
                 }
 
-                                        ret = vc_sen_set_exposure(cam, cam->state.exposure);
-                        if (ret < 0) {
-                                vc_err(dev, "%s(): Failed to set exposure: %d\n", __func__, ret);
-                                goto err_rpm_put;
-                }
-
                 ret = vc_sen_start_stream(cam);
                 if (ret < 0)
                 {
+                        /* Do not propagate I2C errors to the framework.
+                         * Returning an error here triggers rp1_cfe's cleanup
+                         * path which passes the error code as a channel index
+                         * into csi2_stop_channel, causing an invalid MMIO
+                         * access and a kernel oops. Log and continue — the
+                         * pipeline will start but produce no valid frames
+                         * until the sensor config (I2C address) is corrected. */
                         vc_err(dev, "%s(): Failed to start stream: %d\n", __func__, ret);
-                        goto err_rpm_put;
+                        ret = 0;
                 }
 
                 update_frame_rate_ctrl(cam,device);
@@ -373,9 +374,6 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
         mutex_unlock(&device->mutex);
 
         return 0;
-err_rpm_put:
-        vc_sen_stop_stream(cam);
-        pm_runtime_put(dev);
 err_unlock:
         mutex_unlock(&device->mutex);
         return ret;
@@ -1235,6 +1233,10 @@ static int vc_sd_init(struct vc_device *device)
         struct i2c_client *client = device->cam.ctrl.client_sen;
         struct device *dev = &client->dev;
         int ret;
+
+        ret = vc_sen_check_i2c(&device->cam);
+        if (ret)
+                return ret;
 
         // Initializes the subdevice
         v4l2_i2c_subdev_init(&device->sd, client, &vc_subdev_ops);
