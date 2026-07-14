@@ -1047,10 +1047,9 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
                  * the raw VMAX by 2 before subtracting the active height. */
                 u32 vmax_scale = (cam->ctrl.flags & FLAG_DOUBLE_HEIGHT) ? 2 : 1;
 
-                /* VBLANK control = blanking lines = VMAX/scale - active_height.
-                 * mode->vmax.{min,max} are raw VMAX totals, so scale then subtract. */
-                vblank.min = (mode->vmax.min / vmax_scale) > height
-                             ? (mode->vmax.min / vmax_scale) - height : 0;
+                
+                vblank.min = (mode->vmax.def / vmax_scale) > height
+                             ? (mode->vmax.def / vmax_scale) - height : 0;
                 vblank.max = (mode->vmax.max / vmax_scale) > height
                              ? (mode->vmax.max / vmax_scale) - height : 0;
 
@@ -1324,12 +1323,12 @@ static int vc_probe(struct i2c_client *client)
 
     ret = vc_core_init(cam, client);
     if (ret)
-        goto error_pm_disable;
+        goto error_release_core;
 
-    ret = vc_check_hwcfg(cam, dev, device); 
+    ret = vc_check_hwcfg(cam, dev, device);
 
     if (ret)
-        goto error_pm_disable;
+        goto error_release_core;
 
     cam->force_color_mode = device->force_color_mode;
     if (cam->force_color_mode) {
@@ -1339,8 +1338,12 @@ static int vc_probe(struct i2c_client *client)
         vc_core_update_mbus_codes(cam);
     }
 
-    vc_init_supported_mbus_codes(device);    
-    vc_mod_set_mode(cam, &ret); 
+        vc_init_supported_mbus_codes(device);
+        /* Defer module mode selection to stream start so sensor initialization
+         * happens in the streaming path (vc_sen_start_stream). Overlays used to
+         * dictate module mode at probe time in older drivers; on newer platforms
+         * we initialize the module when streaming starts to pick the correct
+         * mode based on runtime endpoint/format information. */
     ret = vc_sd_init(device);
     if (ret)
         goto error_handler_free;
@@ -1360,7 +1363,7 @@ static int vc_probe(struct i2c_client *client)
      ret = v4l2_async_register_subdev_sensor(&device->sd);
      if (ret)
          goto error_subdev_cleanup;
- 
+
      /* Enable runtime PM and take one usage reference */
      pm_runtime_enable(dev);
      vc_notice(dev, "%s(): Runtime PM enabled\n", __func__);
@@ -1371,7 +1374,7 @@ static int vc_probe(struct i2c_client *client)
      }
      vc_notice(dev, "%s(): Probe successful\n", __func__);
      return 0;
- 
+
  error_subdev_cleanup:
      v4l2_subdev_cleanup(&device->sd);
  error_media_entity:
@@ -1379,10 +1382,20 @@ static int vc_probe(struct i2c_client *client)
  error_handler_free:
      v4l2_ctrl_handler_free(&device->ctrl_handler);
      mutex_destroy(&device->mutex);
+ error_release_core:
+     /* pm_runtime_enable() was never called on this path - only release the
+      * module I2C client (0x10) that vc_core_init() may have registered.
+      * Without this, a failed probe (e.g. unsupported lane count) leaks that
+      * client and every subsequent probe fails with "Unable to get module
+      * I2C client for address 0x10" until reboot. */
+     vc_set_power(device, 0);
+     vc_core_release(cam);
+     return ret;
  error_pm_disable:
      pm_runtime_disable(dev);
      pm_runtime_set_suspended(dev);
      vc_set_power(device, 0);
+     vc_core_release(cam);
      return ret;
  }
  
