@@ -221,6 +221,16 @@ modinfo vc_mipi_core
 modinfo vc_mipi_camera
 ```
 
+### Check Loaded Driver Version
+
+Each loaded VC MIPI module exposes its own version via sysfs:
+
+```bash
+cat /sys/module/vc_mipi_core/version
+cat /sys/module/vc_mipi_modules/version
+cat /sys/module/vc_mipi_camera/version
+```
+
 ## 6. Installation Logs (when installation fails)
 
 ### DKMS Installation Log

@@ -253,14 +253,13 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
                 
         case V4L2_CID_VBLANK: {
                 /* Use the active (crop) height, not the full sensor native height.
-                 * vblank is always expressed as (VMAX/scale - active_height), so VMAX
-                 * must be reconstructed with the same scale used when the range was
-                 * reported (see vblank.min/max/def calculation above). */
+                 * Frame period is VMAX x 1H for every sensor — FLAG_DOUBLE_HEIGHT
+                 * affects ROI geometry, not the VMAX line total, so VMAX is simply
+                 * active_height + vblank. */
                 u32 active_height = cam->state.frame.height > 0
                                     ? cam->state.frame.height
                                     : cam->ctrl.frame.height;
-                u32 vmax_scale = (cam->ctrl.flags & FLAG_DOUBLE_HEIGHT) ? 2 : 1;
-                vc_core_set_vmax_overwrite(cam, (active_height + control->value) * vmax_scale);
+                vc_core_set_vmax_overwrite(cam, active_height + control->value);
                 vc_sen_write_vmax(&cam->ctrl, cam->state.vmax_overwrite);
                 return 0;
         }
@@ -345,12 +344,6 @@ static int vc_sd_s_stream(struct v4l2_subdev *sd, int enable)
                         vc_err(dev, "%s(): pm_runtime_get_sync failed: %d\n", __func__, ret);
                         pm_runtime_put_noidle(dev);
                         goto err_unlock;
-                }
-
-                                        ret = vc_sen_set_exposure(cam, cam->state.exposure);
-                        if (ret < 0) {
-                                vc_err(dev, "%s(): Failed to set exposure: %d\n", __func__, ret);
-                                goto err_rpm_put;
                 }
 
                 ret = vc_sen_start_stream(cam);
@@ -1041,17 +1034,14 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
                              ? cam->state.frame.height
                              : cam->ctrl.frame.height;
                 u32 vmax_actual;
-                /* FLAG_DOUBLE_HEIGHT sensors (e.g. IMX335, IMX415) count VMAX in
-                 * half-line units: frame_period = VMAX/2 × 1H.  All vblank values
-                 * exposed to V4L2/libcamera must be in output-line units, so divide
-                 * the raw VMAX by 2 before subtracting the active height. */
-                u32 vmax_scale = (cam->ctrl.flags & FLAG_DOUBLE_HEIGHT) ? 2 : 1;
-
-                
-                vblank.min = (mode->vmax.def / vmax_scale) > height
-                             ? (mode->vmax.def / vmax_scale) - height : 0;
-                vblank.max = (mode->vmax.max / vmax_scale) > height
-                             ? (mode->vmax.max / vmax_scale) - height : 0;
+                /* Frame period is VMAX x 1H for every sensor, including
+                 * FLAG_DOUBLE_HEIGHT ones (e.g. IMX335, IMX415) — that flag
+                 * affects ROI geometry, not the VMAX line total, so vmax.def/max
+                 * are already in output-line units and need no extra scaling. */
+                vblank.min = mode->vmax.def > height
+                             ? mode->vmax.def - height : 0;
+                vblank.max = mode->vmax.max > height
+                             ? mode->vmax.max - height : 0;
 
                 if (cam->state.framerate > 0 && cam->ctrl.clk_pixel > 0) {
                         /* frame_period_ns = 1e12 / framerate_mHz */
@@ -1060,14 +1050,13 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
                         u32 period_1H_ns = (u32)div_u64(
                                 (u64)mode->hmax.def * 1000000000ULL,
                                 cam->ctrl.clk_pixel);
-                        /* frame_period / period_1H gives VMAX in sensor units;
-                         * divide by vmax_scale to get output-line total. */
+                        /* frame_period / period_1H gives VMAX in output-line units. */
                         vmax_actual = period_1H_ns > 0
-                                      ? (frame_period_ns / period_1H_ns) / vmax_scale
-                                      : mode->vmax.def / vmax_scale;
+                                      ? (frame_period_ns / period_1H_ns)
+                                      : mode->vmax.def;
                 } else {
                         /* Native fps — apply crop optimisation in output-line units */
-                        vmax_actual = mode->vmax.def / vmax_scale;
+                        vmax_actual = mode->vmax.def;
                         if ((cam->ctrl.flags & FLAG_INCREASE_FRAME_RATE) &&
                             height < cam->ctrl.frame.height)
                                 vmax_actual -= (cam->ctrl.frame.height - height);
@@ -1121,18 +1110,25 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
          *   HMAX=364, pixel_rate=594 MHz, clk_pixel=74.25 MHz
          *   hmax_output = 364 * 8 = 2912, hblank = 2912 - 2048 = 864 */
         if (cam->ctrl.clk_pixel > 0) {
+                /* Use the active (crop) width, not the full sensor width — a
+                 * cropped mode's output width is narrower than hmax_*_out,
+                 * so using the full sensor width here underestimates hblank
+                 * and libcamera derives too small a line time from it. */
+                u32 active_width = cam->state.frame.width > 0
+                                   ? cam->state.frame.width
+                                   : cam->ctrl.frame.width;
                 u32 hmax_min_out = (u32)div_u64((u64)mode->hmax.min * pixel_rate.max,
                                                cam->ctrl.clk_pixel);
                 u32 hmax_max_out = (u32)div_u64((u64)mode->hmax.max * pixel_rate.max,
                                                cam->ctrl.clk_pixel);
                 u32 hmax_def_out = (u32)div_u64((u64)mode->hmax.def * pixel_rate.max,
                                                cam->ctrl.clk_pixel);
-                hblank.min = (hmax_min_out > cam->ctrl.frame.width)
-                             ? hmax_min_out - cam->ctrl.frame.width : 0;
-                hblank.max = (hmax_max_out > cam->ctrl.frame.width)
-                             ? hmax_max_out - cam->ctrl.frame.width : 0;
-                hblank.def = (hmax_def_out > cam->ctrl.frame.width)
-                             ? hmax_def_out - cam->ctrl.frame.width : 0;
+                hblank.min = (hmax_min_out > active_width)
+                             ? hmax_min_out - active_width : 0;
+                hblank.max = (hmax_max_out > active_width)
+                             ? hmax_max_out - active_width : 0;
+                hblank.def = (hmax_def_out > active_width)
+                             ? hmax_def_out - active_width : 0;
         } else {
                 hblank.min = 0;
                 hblank.max = 0;

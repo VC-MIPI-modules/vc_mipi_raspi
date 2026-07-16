@@ -13,7 +13,8 @@
 
 SUBDEV=""
 VIDEODEV=""
-FRAMES=30
+FRAMES=20
+WARMUP=5
 FRONTEND_DEVICE="rp1-cfe-csi2_ch0"   # bcm2712; override with --frontend for other platforms
 
 usage() {
@@ -22,7 +23,9 @@ Usage: $0 [OPTIONS]
 
   --subdev <dev>      V4L2 subdevice node   (auto-detected if omitted)
   --videodev <dev>    V4L2 video device node (auto-detected if omitted)
-  --frames <N>        Frames to capture per height step (default: 30)
+  --frames <N>        Frames to measure per height step, after warm-up (default: 20)
+  --warmup <N>        Frames to discard before measuring, to exclude
+                      STREAMON/negotiation startup latency (default: 5)
   --frontend <name>   Frontend entity name used on this platform
                       (default: rp1-cfe-csi2_ch0 for bcm2712)
                       Use 'unicam-image' for bcm2711/bcm2837/rp3a0
@@ -35,6 +38,7 @@ while [[ $# -gt 0 ]]; do
         --subdev)    SUBDEV="$2";          shift 2 ;;
         --videodev)  VIDEODEV="$2";        shift 2 ;;
         --frames)    FRAMES="$2";          shift 2 ;;
+        --warmup)    WARMUP="$2";          shift 2 ;;
         --frontend)  FRONTEND_DEVICE="$2"; shift 2 ;;
         -h|--help)   usage ;;
         *) echo "Unknown option: $1"; usage ;;
@@ -120,7 +124,7 @@ echo "  Videodev : $VIDEODEV"
 echo "  Mediadev : $MEDIADEV"
 echo "  Format   : $MEDIABUSFMT ($FOURCC)"
 echo "  Full res : ${FULL_WIDTH}x${FULL_HEIGHT}"
-echo "  Frames   : $FRAMES per step"
+echo "  Frames   : $FRAMES measured per step (after $WARMUP warm-up frames)"
 echo "============================================"
 
 # ── apply crop/format (mirrors set_cropping in vc-config) ─────────────────────
@@ -138,39 +142,52 @@ apply_cropping() {
         >/dev/null 2>&1 || true
 }
 
-# ── measure FPS by timing a fixed frame burst ──────────────────────────────────
+# ── measure FPS from per-frame kernel DQBUF timestamps ─────────────────────────
+# Wall-clock timing around the whole v4l2-ctl invocation (the old approach)
+# includes fixed per-invocation overhead (device open, format negotiation,
+# buffer allocation, the STREAMON handshake) inside the measured window. At
+# low fps that overhead is a small fraction of the total and barely matters;
+# at high fps (small crop heights) the same fixed cost can be a large
+# fraction of a short burst, making the reported fps come out far too low
+# (observed: ~57 fps reported vs. ~106 fps actual on a 600-line IMX296 crop).
+#
+# --verbose makes v4l2-ctl print a "delta: X ms" figure per frame, derived
+# from the kernel's own DQBUF timestamps — immune to userspace startup cost.
+# Discarding the first $warmup deltas (STREAMON/AE settling) and averaging
+# the rest gives an accurate reading without needing a huge frame count.
 measure_fps() {
-    local frames=$1
-    local t0 t1 elapsed_ms
+    local frames=$1 warmup=$2
+    local total=$(( frames + warmup ))
     local tmpfile
     tmpfile=$(mktemp)
 
-    t0=$(date +%s%3N)
-    v4l2-ctl --stream-mmap --device="$VIDEODEV" --stream-count="$frames" >/dev/null 2>"$tmpfile"
+    v4l2-ctl --stream-mmap --device="$VIDEODEV" --stream-count="$total" --verbose \
+        >"$tmpfile" 2>&1
     local rc=$?
-    t1=$(date +%s%3N)
 
-    local stderr_out
-    stderr_out=$(cat "$tmpfile")
-    rm -f "$tmpfile"
-
-    elapsed_ms=$(( t1 - t0 ))
-
-    # Detect failure: non-zero exit or STREAMON/QBUF error in stderr.
-    # Do NOT use an elapsed_ms threshold — high-speed sensors (e.g. 16 lines)
-    # can exceed 3000fps, so hundreds of frames may complete in milliseconds.
-    if [[ $rc -ne 0 ]] \
-        || echo "$stderr_out" | grep -q "returned -1\|Invalid argument"; then
-        # Surface the actual error line for diagnosis
+    if [[ $rc -ne 0 ]] || grep -q "returned -1\|Invalid argument" "$tmpfile"; then
         local err_line
-        err_line=$(echo "$stderr_out" | grep -m1 "returned -1\|Invalid argument" || true)
+        err_line=$(grep -m1 "returned -1\|Invalid argument" "$tmpfile" || true)
         [[ -n "$err_line" ]] && echo "  !! $err_line" >&2
+        rm -f "$tmpfile"
         echo "FAIL"
         return
     fi
 
-    (( elapsed_ms == 0 )) && elapsed_ms=1
-    echo "scale=2; $frames * 1000 / $elapsed_ms" | bc
+    # One delta per frame after the first; skip $warmup of them, average the rest.
+    local avg_delta_ms
+    avg_delta_ms=$(grep -oP 'delta:\s*\K[0-9.]+(?=\s*ms)' "$tmpfile" \
+        | tail -n +$(( warmup + 1 )) \
+        | awk '{sum+=$1; n++} END {if (n > 0) printf "%.4f", sum/n}')
+    rm -f "$tmpfile"
+
+    if [[ -z "$avg_delta_ms" ]]; then
+        echo "  !! not enough frames captured to measure (need > $warmup)" >&2
+        echo "FAIL"
+        return
+    fi
+
+    echo "scale=2; 1000 / $avg_delta_ms" | bc
 }
 
 # ── build test height list: step down by 8 lines until < 8 ─────────────────
@@ -189,7 +206,7 @@ for height in "${TEST_HEIGHTS[@]}"; do
     top=$(( (FULL_HEIGHT - height) / 2 ))   # centre crop vertically
     apply_cropping "$FULL_WIDTH" "$height" 0 "$top"
 
-    fps=$(measure_fps "$FRAMES")
+    fps=$(measure_fps "$FRAMES" "$WARMUP")
 
     if [[ "$fps" == "FAIL" ]]; then
         printf "%-14s %-12s %-16s\n" "$height" "FAIL" "N/A"
