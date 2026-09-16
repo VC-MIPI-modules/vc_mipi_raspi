@@ -301,6 +301,7 @@ configure_device_tree() {
     manufacturer=$(whiptail --menu "Manufacturer:" 15 200 3  --default-item "$current_manu" \
     "sony" "SONY IMX" \
     "ov" "OMNIVISION" \
+    "os" "ONSEMI" \
     3>&1 1>&2 2>&3)
     if [ $? -ne 0 ]; then
         break

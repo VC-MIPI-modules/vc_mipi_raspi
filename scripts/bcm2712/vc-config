@@ -261,6 +261,7 @@ configure_device_tree() {
         manufacturer=$(whiptail --menu "Manufacturer:" 15 200 3  --default-item "$current_manu" \
         "sony" "SONY IMX" \
         "ov" "OMNIVISION" \
+        "os" "ONSEMI" \
         3>&1 1>&2 2>&3)
         if [ $? -ne 0 ]; then
             break
@@ -593,8 +594,12 @@ set_format_unpacked() {
                 cfe_fmt="Y16_1X16"
             elif [[ "$mediabusfmt" == *"SGBRG"* ]]; then
                 cfe_fmt="SGBRG16_1X16"
+            elif [[ "$mediabusfmt" == *"SGRBG"* ]]; then
+                cfe_fmt="SGRBG16_1X16"
+            elif [[ "$mediabusfmt" == *"SBGGR"* ]]; then
+                cfe_fmt="SBGGR16_1X16"
             else
-                cfe_fmt="SRGGB16_1X16"  # Default fallback
+                cfe_fmt="SRGGB16_1X16"  # Default fallback (RGGB)
             fi
 
             new_format_cfe="$cfe_fmt/"$width"x"$height""
