@@ -145,6 +145,7 @@
 		cam0_lanes4 		=      <0>,"+1+2+3=1004=2004";		
 		cam0_lanes0 		= 	   <0>,"";
 		cam0_manu_ov	   	=      <&vc_mipi_cam0>,"reg:0=",<0x60>;
+		cam0_manu_os	   	=      <&vc_mipi_cam0>,"reg:0=",<0x36>;
 		cam0_libcamera_on 	=      <&vc_mipi_cam0>,"libcamera";
 
 
