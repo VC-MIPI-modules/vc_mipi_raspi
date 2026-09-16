@@ -77,6 +77,7 @@ struct vc_device
         struct v4l2_ctrl *vblank_ctrl;
         struct v4l2_ctrl *blacklevel_ctrl;
         struct v4l2_ctrl *pixel_rate_ctrl;
+        struct v4l2_ctrl *gain_ctrl;
 };
 static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam);
 static void vc_update_blacklevel_ctrl(struct vc_device *device, struct vc_cam *cam);
@@ -235,13 +236,15 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
         {
 
         case V4L2_CID_HBLANK:
-                if (cam->ctrl.clk_pixel > 0 && pixel_rate.max > 0)
+        {
+                u32 clk_pixel = cam->ctrl.clk_pixel;
+                if (clk_pixel > 0 && pixel_rate.max > 0)
                 {
                         u32 active_width = cam->state.frame.width > 0
                                                ? cam->state.frame.width
                                                : cam->ctrl.frame.width;
                         u32 new_hmax = (u32)div_u64(
-                            (u64)(active_width + control->value) * cam->ctrl.clk_pixel,
+                            (u64)(active_width + control->value) * clk_pixel,
                             pixel_rate.max);
                         vc_core_set_hmax_overwrite(cam, new_hmax);
                 }
@@ -254,6 +257,7 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
                 vc_notice(dev, "%s(): Set HBLANK: %d\n", __func__, control->value);
                 vc_sen_set_hmax(cam);
                 return 0;
+        }
 
         case V4L2_CID_VBLANK:
         {
@@ -412,6 +416,9 @@ static int vc_sd_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state
         vc_core_set_frame(cam, 0, 0, mf->width, mf->height);
         mf->field = V4L2_FIELD_NONE;
         mf->colorspace = V4L2_COLORSPACE_SRGB;
+
+      
+        vc_update_clk_rates(device, cam);
 
         mutex_unlock(&device->mutex);
 
@@ -691,7 +698,9 @@ static int vc_ctrl_init_ctrl(struct vc_device *device, struct v4l2_ctrl_handler 
         ctrl = v4l2_ctrl_new_std(&device->ctrl_handler, &vc_ctrl_ops, id, control->min, control->max, 1, control->def);
         if (ctrl == NULL)
         {
-                vc_err(dev, "%s(): Failed to init 0x%08x ctrl\n", __func__, id);
+                vc_err(dev, "%s(): Failed to init 0x%08x (%s) ctrl (min=%u max=%u def=%u): %d\n",
+                        __func__, id, v4l2_ctrl_get_name(id) ? v4l2_ctrl_get_name(id) : "unknown",
+                        control->min, control->max, control->def, device->ctrl_handler.error);
                 return -EIO;
         }
         if (flags)
@@ -711,7 +720,9 @@ static int vc_ctrl_init_ctrl_special(struct vc_device *device, struct v4l2_ctrl_
         ctrl = v4l2_ctrl_new_std(&device->ctrl_handler, &vc_ctrl_ops, id, min, max, 1, def);
         if (ctrl == NULL)
         {
-                vc_err(dev, "%s(): Failed to init 0x%08x ctrl\n", __func__, id);
+                vc_err(dev, "%s(): Failed to init 0x%08x (%s) ctrl (min=%d max=%d def=%d): %d\n",
+                        __func__, id, v4l2_ctrl_get_name(id) ? v4l2_ctrl_get_name(id) : "unknown",
+                        min, max, def, device->ctrl_handler.error);
                 return -EIO;
         }
 
@@ -728,7 +739,9 @@ static int vc_ctrl_init_ctrl_lfreq(struct vc_device *device, struct v4l2_ctrl_ha
         ctrl = v4l2_ctrl_new_int_menu(&device->ctrl_handler, &vc_ctrl_ops, id, 0, 0, &control->def);
         if (ctrl == NULL)
         {
-                vc_err(dev, "%s(): Failed to init 0x%08x ctrl\n", __func__, id);
+                vc_err(dev, "%s(): Failed to init 0x%08x (%s) ctrl (def=%llu): %d\n",
+                        __func__, id, v4l2_ctrl_get_name(id) ? v4l2_ctrl_get_name(id) : "unknown",
+                        (unsigned long long)control->def, device->ctrl_handler.error);
                 return -EIO;
         }
 
@@ -797,7 +810,9 @@ static int vc_ctrl_init_custom_ctrl(struct vc_device *device, struct v4l2_ctrl_h
         *ctrl = v4l2_ctrl_new_custom(&device->ctrl_handler, config, NULL);
         if (*ctrl == NULL)
         {
-                vc_err(dev, "%s(): Failed to init 0x%08x ctrl\n", __func__, config->id);
+                vc_err(dev, "%s(): Failed to init 0x%08x (%s) ctrl (min=%lld max=%lld def=%lld step=%llu): %d\n",
+                        __func__, config->id, config->name ? config->name : "unknown",
+                        config->min, config->max, config->def, config->step, device->ctrl_handler.error);
                 return -EIO;
         }
         return 0;
@@ -1015,7 +1030,7 @@ static vc_mode *vc_get_mode(struct vc_cam *cam)
         struct vc_desc_mode *mode_desc = &cam->desc.modes[safe_idx];
         vc_mode *mode = NULL;
 
-        for (int i = 0; i < MAX_VC_DESC_MODES; i++)
+        for (int i = 0; i < MAX_VC_MODES; i++)
         {
                 if (mode_desc->format == cam->ctrl.mode[i].format &&
                     mode_desc->num_lanes == cam->ctrl.mode[i].num_lanes &&
@@ -1054,6 +1069,7 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
         struct vc_desc_mode *mode_desc = &cam->desc.modes[safe_mode_idx];
         int num_lanes = mode->num_lanes;
         int bit_depth = vc_get_bit_depth(mode->format);
+        u32 clk_pixel = cam->ctrl.clk_pixel;
         /* data_rate is stored in the ROM as a little-endian u32 in bps */
         u32 data_rate_mbps = (*(__u32 *)mode_desc->data_rate) / 1000000;
 
@@ -1104,14 +1120,14 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
                                  ? mode->vmax.max - height
                                  : 0;
 
-                if (cam->state.framerate > 0 && cam->ctrl.clk_pixel > 0)
+                if (cam->state.framerate > 0 && clk_pixel > 0)
                 {
                         /* frame_period_ns = 1e12 / framerate_mHz */
                         u32 frame_period_ns = (u32)div_u64(1000000000000ULL,
                                                            cam->state.framerate);
                         u32 period_1H_ns = (u32)div_u64(
                             (u64)mode->hmax.def * 1000000000ULL,
-                            cam->ctrl.clk_pixel);
+                            clk_pixel);
                         /* frame_period / period_1H gives VMAX in output-line units. */
                         vmax_actual = period_1H_ns > 0
                                           ? (frame_period_ns / period_1H_ns)
@@ -1174,7 +1190,7 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
          * Example – IMX900 mode 7 (4-lane 10bit):
          *   HMAX=364, pixel_rate=594 MHz, clk_pixel=74.25 MHz
          *   hmax_output = 364 * 8 = 2912, hblank = 2912 - 2048 = 864 */
-        if (cam->ctrl.clk_pixel > 0)
+        if (clk_pixel > 0)
         {
                 /* Use the active (crop) width, not the full sensor width — a
                  * cropped mode's output width is narrower than hmax_*_out,
@@ -1184,11 +1200,11 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
                                        ? cam->state.frame.width
                                        : cam->ctrl.frame.width;
                 u32 hmax_min_out = (u32)div_u64((u64)mode->hmax.min * pixel_rate.max,
-                                                cam->ctrl.clk_pixel);
+                                                clk_pixel);
                 u32 hmax_max_out = (u32)div_u64((u64)mode->hmax.max * pixel_rate.max,
-                                                cam->ctrl.clk_pixel);
+                                                clk_pixel);
                 u32 hmax_def_out = (u32)div_u64((u64)mode->hmax.def * pixel_rate.max,
-                                                cam->ctrl.clk_pixel);
+                                                clk_pixel);
                 hblank.min = (hmax_min_out > active_width)
                                  ? hmax_min_out - active_width
                                  : 0;
@@ -1239,6 +1255,8 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
                 else
                         device->hblank_ctrl->flags &= ~V4L2_CTRL_FLAG_READ_ONLY;
         }
+
+       
 
         /* Update live V4L2_CID_VBLANK control with the actual vblank. */
         if (device->vblank_ctrl)
@@ -1337,6 +1355,7 @@ static int vc_sd_init(struct vc_device *device)
         ret |= vc_ctrl_init_ctrl(device, &device->ctrl_handler, V4L2_CID_EXPOSURE, &device->cam.ctrl.exposure, 0, NULL);
         ret |= vc_ctrl_init_ctrl_special(device, &device->ctrl_handler, V4L2_CID_ANALOGUE_GAIN,
                                          0, device->cam.ctrl.again.max_mdB + device->cam.ctrl.dgain.max_mdB, 0);
+        device->gain_ctrl = v4l2_ctrl_find(&device->ctrl_handler, V4L2_CID_ANALOGUE_GAIN);
 
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_blacklevel, &device->blacklevel_ctrl);
         ret |= vc_ctrl_init_custom_ctrl(device, &device->ctrl_handler, &ctrl_orientation, &ctrl);
