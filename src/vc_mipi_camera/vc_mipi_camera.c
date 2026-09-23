@@ -649,6 +649,12 @@ static int vc_check_hwcfg(struct vc_cam *cam, struct device *dev, struct vc_devi
                 dev_info(dev, "force-color-mode enabled\n");
         }
 
+        if (device_property_read_bool(dev, "reset-always"))
+        {
+                cam->ctrl.flags |= FLAG_RESET_ALWAYS;
+                dev_info(dev, "reset-always enabled\n");
+        }
+
         /* Set and check the number of MIPI CSI2 data lanes */
         ret = vc_core_set_num_lanes(cam, ep_cfg.bus.mipi_csi2.num_data_lanes);
 

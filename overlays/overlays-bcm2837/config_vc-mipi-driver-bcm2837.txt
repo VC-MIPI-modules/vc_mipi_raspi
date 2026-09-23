@@ -31,10 +31,15 @@
 ### Sony(IMX...       )           => cam0_manu_sony
 
 
+### Always write all settings on stream start. Needed if the sensor power is switched
+### off externally after stream stop, so the sensor restarts with its default settings.
+### => cam0_reset_always
+
 dtoverlay=vc-mipi-bcm2837-cam0
 dtparam=cam0_lanes2
 dtparam=cam0_manu_sony
 dtparam=cam0_libcamera_off
+#dtparam=cam0_reset_always
 
 ################################################################################
 # cam1 #########################################################################
@@ -57,10 +62,15 @@ dtparam=cam0_libcamera_off
 ### Omnivision (OV7251,OV9281)    => cam1_manu_ov
 ### Sony(IMX...       )           => cam1_manu_sony
 
+### Always write all settings on stream start. Needed if the sensor power is switched
+### off externally after stream stop, so the sensor restarts with its default settings.
+### => cam1_reset_always
+
 dtoverlay=vc-mipi-bcm2837-cam1
 dtparam=cam1_lanes2
 dtparam=cam1_manu_sony
 dtparam=cam1_libcamera_off
+#dtparam=cam1_reset_always
 
 ################################################################################
 # memory #######################################################################

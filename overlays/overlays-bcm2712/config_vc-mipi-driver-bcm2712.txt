@@ -34,11 +34,16 @@
 ### Force a mono sensor to output Bayer/color mbus codes (e.g. IMX900C), only for color simulation, not for production meant!
 ### => cam0_force_color
 
+### Always write all settings on stream start. Needed if the sensor power is switched
+### off externally after stream stop, so the sensor restarts with its default settings.
+### => cam0_reset_always
+
 dtoverlay=vc-mipi-bcm2712-cam0
 dtparam=cam0_lanes4
 dtparam=cam0_manu_os
 dtparam=cam0_libcamera_off
 #dtparam=cam0_force_color
+#dtparam=cam0_reset_always
 
 ################################################################################
 # cam1 #########################################################################
@@ -65,11 +70,16 @@ dtparam=cam0_libcamera_off
 ### Force a mono sensor to output Bayer/color mbus codes (e.g. IMX900C), only for color simulation, not for production meant!
 ### => cam1_force_color
 
+### Always write all settings on stream start. Needed if the sensor power is switched
+### off externally after stream stop, so the sensor restarts with its default settings.
+### => cam1_reset_always
+
 dtoverlay=vc-mipi-bcm2712-cam1
 dtparam=cam1_lanes4
 dtparam=cam1_manu_os
 dtparam=cam1_libcamera_off
 #dtparam=cam1_force_color
+#dtparam=cam1_reset_always
 
 
 ################################################################################

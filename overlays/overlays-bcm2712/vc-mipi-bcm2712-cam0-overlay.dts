@@ -165,6 +165,7 @@
 
 		cam0_libcamera_on	=      <&vc_mipi_cam0>,"libcamera";
 		cam0_force_color	=      <&vc_mipi_cam0>,"force-color-mode";
+		cam0_reset_always	=      <&vc_mipi_cam0>,"reset-always";
 
 
     };

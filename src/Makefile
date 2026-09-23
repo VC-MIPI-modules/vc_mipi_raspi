@@ -81,6 +81,7 @@ all: build
 
 clean:
 	$(MAKE) -C $(KERNEL_HEADERS) M=$(CURDIR) clean
+	-rm -f */Module.symvers */modules.order
 	-rm -f $(SENSORDRIVERS)
 	-rm -f $(DEVICETREES)
 
