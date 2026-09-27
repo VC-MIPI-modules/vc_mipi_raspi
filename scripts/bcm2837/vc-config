@@ -1009,10 +1009,33 @@ configure_subdev_controls() {
 
         # Get the current value of the selected control
         current_value=$(v4l2-ctl --device=$subdev --get-ctrl=$selected_control | awk '{print $NF}')
-        
-        # Prompt the user to enter a new value for the control
-        new_value=$(whiptail --inputbox "Enter the value for $selected_control (current: $current_value):" 8 40 "$current_value" 3>&1 1>&2 2>&3)
-        
+        control_info=$(v4l2-ctl --device=$subdev --list-ctrls | grep "$selected_control")
+
+        if [[ "$control_info" == *"(menu)"* ]]; then
+            # Build the list of menu entries (index + label) for this control
+            menu_items=()
+            in_block=0
+            while IFS= read -r line; do
+                if [[ "$line" =~ ^[[:space:]]*${selected_control}[[:space:]] ]]; then
+                    in_block=1
+                    continue
+                fi
+                if [[ $in_block -eq 1 ]]; then
+                    if [[ "$line" =~ ^[[:space:]]+([0-9]+):[[:space:]]*(.*)$ ]]; then
+                        menu_items+=("${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}")
+                    else
+                        in_block=0
+                    fi
+                fi
+            done < <(v4l2-ctl --device=$subdev --list-ctrls-menus)
+
+            # Prompt the user to pick a value, pre-selecting the current one
+            new_value=$(whiptail --default-item "$current_value" --menu "Select the value for $selected_control (current: $current_value):" 20 70 10 "${menu_items[@]}" 3>&1 1>&2 2>&3)
+        else
+            # Prompt the user to enter a new value for the control
+            new_value=$(whiptail --inputbox "Enter the value for $selected_control (current: $current_value):" 8 40 "$current_value" 3>&1 1>&2 2>&3)
+        fi
+
         # Check if cancel was pressed
         if [ $? -ne 0 ]; then
             continue
