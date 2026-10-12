@@ -244,7 +244,7 @@ configure_device_tree() {
     # Use whiptail to create a menu for selecting the number of lanes
     
     if [ $? -ne 0 ]; then
-        break
+        return
     fi 
     if [ "$lanes" != "$current_lanes" ]; then
         change=true
@@ -256,7 +256,7 @@ configure_device_tree() {
     "os" "ONSEMI" \
     3>&1 1>&2 2>&3)
     if [ $? -ne 0 ]; then
-        break
+        return
     fi 
         if [ "$manufacturer" != "$current_manu" ]; then
         change=true
@@ -652,7 +652,7 @@ dialog_set_debuglevel()
      "6" "Registers" \
         3>&1 1>&2 2>&3)
     if [ $? -ne 0 ]; then
-        break
+        return
     fi 
     echo "Selected subdevice: $subdev"
     echo "Debug level: $debuglevel"
