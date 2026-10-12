@@ -236,6 +236,7 @@ configure_device_tree() {
 
     current_lanes=$(grep "^dtparam="$camera"_lanes" "$config_file" | awk -F 'lanes' '{print $2}')
     current_manu=$(grep "^dtparam="$camera"_manu_" "$config_file" | awk -F '_manu_' '{print $2}')
+    current_libcamera=$(grep "^dtparam="$camera"_libcamera_" "$config_file" | awk -F '_libcamera_' '{print $2}')
     lanes=$(whiptail --menu "Select the number of lanes:" 15 200 3 --default-item "$current_lanes" --cancel-button "Cancel"\
             "1" "1 lane (i.e. OV7251, IMX296, IMX297)" \
             "2" "2 lanes (i.e.  OV9281, IMX264, IMX265, IMX178, IMX183, IMX226, IMX250, IMX252, IMX273, IMX290, IMX327, IMX335, IMX392)" 3>&1 1>&2 2>&3)
@@ -262,6 +263,17 @@ configure_device_tree() {
         if [ "$manufacturer" != "$current_manu" ]; then
         change=true
             sudo sed -i "s/^dtparam=${camera}_manu_.*/dtparam=${camera}_manu_${manufacturer}/" "$config_file"
+    fi
+    libcamera=$(whiptail --menu "Libcamera support:" 15 200 2  --default-item "$current_libcamera" \
+    "on" "Libcamera support on" \
+    "off" "Libcamera support off" \
+    3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        return
+    fi
+    if [ "$libcamera" != "$current_libcamera" ]; then
+        change=true
+        sudo sed -i "s/^dtparam=${camera}_libcamera_.*/dtparam=${camera}_libcamera_${libcamera}/" "$config_file"
     fi
       
     if [ "$change" = true ]; then   
@@ -932,6 +944,46 @@ dialog_get_versions()
 }
  
 
+dialog_test_gstreamer()
+{
+    local subdev=$1
+
+    # Get the mDNS hostname
+    mdns_name=$(hostname).local
+
+    if whiptail --yesno "This will start a GStreamer pipeline with libcamerasrc that streams video over TCP on port 5000.\n\nTo view the stream from another device, run:\ngst-launch-1.0 tcpclientsrc host=$mdns_name port=5000 ! multipartdemux ! jpegdec ! autovideosink\n\nThe pipeline will run until you press Ctrl+C.\n\nDo you want to continue?" 16 90 --title "GStreamer Test"; then
+        echo "Starting GStreamer pipeline..."
+        echo "You can view the stream by connecting to this device on port 5000"
+        echo "Client command: gst-launch-1.0 tcpclientsrc host=$mdns_name port=5000 ! multipartdemux ! jpegdec ! autovideosink"
+        echo "Press Ctrl+C to stop the stream"
+        sleep 3
+
+        # The hardware JPEG encoder (bcm2835-codec) is exposed by GStreamer
+        # as v4l2video<N>jpegenc, where <N> is its video node number
+        # (usually 31). Look it up and fall back to software jpegenc.
+        local jpegenc
+        jpegenc=$(gst-inspect-1.0 2>/dev/null | grep -o 'v4l2video[0-9]*jpegenc' | head -n 1)
+        if [ -n "$jpegenc" ]; then
+            jpegenc="$jpegenc extra-controls=c,compression_quality=90"
+        else
+            echo "Hardware JPEG encoder not found, using software jpegenc"
+            jpegenc="jpegenc quality=90"
+        fi
+
+        # Restrict the Vulkan loader to the Pi's own driver (V3DV). Some Mesa
+        # builds ship a libvulkan_radeon.so that segfaults on dlopen, which
+        # crashes GStreamer while it loads libgstvulkan.so during startup.
+        VK_DRIVER_FILES=/usr/share/vulkan/icd.d/broadcom_icd.json \
+        gst-launch-1.0 libcamerasrc ! \
+            video/x-raw,width=1920,height=1080,format=NV12,framerate=30/1,colorimetry=bt709 ! \
+            queue ! v4l2convert ! queue ! \
+            $jpegenc ! \
+            multipartmux ! tcpserversink host=0.0.0.0 port=5000
+
+        whiptail --msgbox "GStreamer pipeline stopped." 8 40 --title "Info" 3>&1 1>&2 2>&3
+    fi
+}
+
 get_entity_name() {
     local mediadev=$1
     local entity_name=$(media-ctl -d "$mediadev" -p | grep " vc_mipi_camera " | awk -F 'vc_mipi_camera ' '{print $2}' | awk '{print $1}'  |head -n 1)
@@ -959,6 +1011,7 @@ configure_subdev_controls() {
         menu_options+=("Show Config" "Show stored configuration")
         menu_options+=("Logging" "Set logging level")
         menu_options+=("Version" "Get modules versions")
+        menu_options+=("GStreamer Test" "Test camera with GStreamer libcamerasrc")
 
         for control in $controls; do
             if ! v4l2-ctl --device=$subdev --get-ctrl=$control;then
@@ -1003,6 +1056,10 @@ configure_subdev_controls() {
         fi
         if([ "$selected_control" == "Version" ]); then
             dialog_get_versions 
+            continue
+        fi
+        if([ "$selected_control" == "GStreamer Test" ]); then
+            dialog_test_gstreamer "$subdev"
             continue
         fi
 
