@@ -201,6 +201,112 @@ if [ "$camera_found" = false ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# libcamera / rpicam-apps / GStreamer installation
+echo "Collecting libcamera and GStreamer information..."
+
+section "libcamera Packages (dpkg)"
+# The VC libcamera fork is built from source into /usr and is overwritten
+# if the distribution packages are installed or upgraded afterwards.
+dpkg -l | grep -E 'libcamera|rpicam|libpisp|picamera2' >> "$INFO" \
+    || echo "No libcamera/rpicam packages installed via dpkg" >> "$INFO"
+
+section "libcamera Libraries"
+ldconfig -p | grep -E 'libcamera(-base)?\.so' >> "$INFO" 2>&1
+ls -l /usr/lib/*/libcamera*.so* /usr/local/lib/*/libcamera*.so* /usr/local/lib/libcamera*.so* >> "$INFO" 2>/dev/null
+
+section "libcamera IPA Modules and VC Tuning Files"
+ls -l /usr/lib/*/libcamera/ipa /usr/local/lib/*/libcamera/ipa >> "$INFO" 2>/dev/null
+tuning_files=$(ls -l /usr/share/libcamera/ipa/rpi/*/vc_mipi* /usr/local/share/libcamera/ipa/rpi/*/vc_mipi* 2>/dev/null)
+if [ -n "$tuning_files" ]; then
+    echo "$tuning_files" >> "$INFO"
+else
+    echo "No VC MIPI tuning files found (vc_mipi_camera.json)" >> "$INFO"
+fi
+
+section "libcamera Environment Variables"
+env | grep -E '^(LIBCAMERA|GST_PLUGIN|LD_LIBRARY)' >> "$INFO" || echo "(none set)" >> "$INFO"
+
+section "rpicam-apps"
+if command -v rpicam-hello &> /dev/null; then
+    which -a rpicam-hello rpicam-vid libcamera-hello >> "$INFO" 2>/dev/null
+    rpicam-hello --version >> "$INFO" 2>&1
+    echo "--- linked libcamera ---" >> "$INFO"
+    ldd "$(command -v rpicam-hello)" | grep -E 'camera' >> "$INFO" 2>&1
+else
+    echo "rpicam-apps not installed" >> "$INFO"
+fi
+
+section "GStreamer"
+if command -v gst-inspect-1.0 &> /dev/null; then
+    gst-inspect-1.0 --version >> "$INFO" 2>&1
+    dpkg -l | grep -E 'gstreamer1\.0|libgstreamer' >> "$INFO"
+    echo "" >> "$INFO"
+    echo "--- libcamera / V4L2 / encoder elements ---" >> "$INFO"
+    gst-inspect-1.0 2>/dev/null | grep -E '^(libcamera|video4linux2|v4l2codecs|x264|x265|openh264|jpeg):' >> "$INFO"
+else
+    echo "GStreamer tools not installed (gstreamer1.0-tools)" >> "$INFO"
+fi
+
+section "GStreamer libcamerasrc Plugin"
+if gst-inspect-1.0 libcamerasrc > "$OUTDIR/gst_inspect_libcamerasrc.txt" 2>&1; then
+    sed -n '/Plugin Details/,/^$/p' "$OUTDIR/gst_inspect_libcamerasrc.txt" >> "$INFO"
+    plugin=$(sed -n 's/^ *Filename *//p' "$OUTDIR/gst_inspect_libcamerasrc.txt")
+    echo "--- linked libcamera ---" >> "$INFO"
+    ldd "$plugin" 2>/dev/null | grep -E 'camera' >> "$INFO"
+    echo "(full properties in gst_inspect_libcamerasrc.txt)" >> "$INFO"
+else
+    echo "libcamerasrc plugin not found" >> "$INFO"
+    cat "$OUTDIR/gst_inspect_libcamerasrc.txt" >> "$INFO"
+fi
+
+# ---------------------------------------------------------------------------
+# libcamera test run (only cameras enabled with dtparam=camX_libcamera_on are listed)
+section "libcamera Test"
+LCLOG="$OUTDIR/libcamera_test.log"
+if command -v rpicam-hello &> /dev/null; then
+    echo "Running libcamera test..."
+    echo "--- rpicam-hello --list-cameras -v ---" >> "$LCLOG"
+    rpicam-hello --list-cameras -v >> "$LCLOG" 2>&1
+    cameras=$(grep -E '^\s*[0-9]+ : ' "$LCLOG")
+    if [ -z "$cameras" ]; then
+        echo "libcamera lists no cameras (is dtparam=camX_libcamera_on set?)" >> "$INFO"
+    else
+        echo "$cameras" >> "$INFO"
+    fi
+
+    for idx in $(echo "$cameras" | sed -n 's/^[[:space:]]*\([0-9]*\) :.*/\1/p'); do
+        PTS="$OUTDIR/libcamera_pts_cam$idx.txt"
+        echo "" >> "$LCLOG"
+        echo "--- rpicam-vid -v --camera $idx (3 s) ---" >> "$LCLOG"
+        timeout -k 2 15 rpicam-vid -v -n --camera "$idx" -t 3000 --codec yuv420 -o /dev/null \
+            --save-pts "$PTS" >> "$LCLOG" 2>&1
+        frames=$(grep -c '^[0-9]' "$PTS" 2>/dev/null)
+        # fps from the median frame interval (timestamps in ms)
+        fps=$(awk '/^[0-9]/ { if (n++) print $1 - p; p = $1 }' "$PTS" 2>/dev/null | sort -n \
+              | awk '{ d[NR] = $1 } END { if (NR > 1) printf "%.2f", 1000 / d[int((NR + 1) / 2)] }')
+        echo "rpicam-vid camera $idx: ${frames:-0} frames${fps:+, $fps fps}" >> "$INFO"
+    done
+else
+    echo "rpicam-apps not installed, rpicam test skipped" >> "$INFO"
+fi
+
+if gst-inspect-1.0 libcamerasrc > /dev/null 2>&1; then
+    echo "" >> "$LCLOG"
+    echo "--- gst-launch-1.0 -v libcamerasrc (60 buffers) ---" >> "$LCLOG"
+    # Restrict the Vulkan loader to the Pi's own driver (V3DV), see vc-config:
+    # some Mesa builds crash GStreamer while it loads libgstvulkan.so.
+    vk_icd=/usr/share/vulkan/icd.d/broadcom_icd.json
+    [ -f "$vk_icd" ] && export VK_DRIVER_FILES=$vk_icd
+    if timeout -k 2 15 gst-launch-1.0 -v libcamerasrc ! video/x-raw,format=NV12 ! identity eos-after=60 ! fakesink \
+            >> "$LCLOG" 2>&1; then
+        echo "GStreamer libcamerasrc: OK (60 buffers received)" >> "$INFO"
+    else
+        echo "GStreamer libcamerasrc: FAILED (exit code $?, see libcamera_test.log)" >> "$INFO"
+    fi
+    unset VK_DRIVER_FILES
+fi
+
+# ---------------------------------------------------------------------------
 # Logs (kept as separate files)
 echo "Collecting logs..."
 sudo dmesg > "$OUTDIR/dmesg.log"
@@ -213,7 +319,9 @@ echo "  export.dts       - device tree export"
 echo "  dmesg.log        - full kernel ring buffer"
 echo "  journalctl_kernel.log - recent kernel journal entries"
 echo "  v4l2_capture_*.log - v4l2-ctl stream output from camera diagnostic capture
-  dmesg_camera_*.log - kernel messages from camera diagnostic capture"
+  dmesg_camera_*.log - kernel messages from camera diagnostic capture
+  libcamera_test.log - rpicam-hello/rpicam-vid and GStreamer libcamerasrc test output
+  gst_inspect_libcamerasrc.txt - GStreamer libcamerasrc plugin details"
 echo ""
 
 # Create tar.gz archive

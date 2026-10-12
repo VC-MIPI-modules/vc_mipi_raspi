@@ -36,6 +36,35 @@ Run the installation with manual packages:
 > sudo dpkg -i ./vc-mipi-driver-bcm2712_xxx_arm64.deb
 > ```
 
+## Configure the lanes
+Before rebooting, the number of MIPI lanes (and the sensor manufacturer) has to be set for each camera.
+If the lanes do not fit the sensor, no camera is detected.
+
+The settings are in the boot file installed by the package (here for BCM2712):
+```
+sudo nano /boot/firmware/config_vc-mipi-driver-bcm2712.txt
+```
+```
+dtoverlay=vc-mipi-bcm2712-cam0
+dtparam=cam0_lanes4         # cam0_lanes1, cam0_lanes2 or cam0_lanes4
+dtparam=cam0_manu_sony      # cam0_manu_sony, cam0_manu_ov (Omnivision) or cam0_manu_os (Onsemi)
+```
+Do the same with the `cam1_...` entries for the second camera.
+
+| Lanes | Sensors |
+| ----- | ------- |
+| 1     | OV7251, IMX296, IMX297 |
+| 2     | OV9281, IMX264, IMX265 |
+| 2, 4  | IMX178, IMX183, IMX226, IMX250, IMX252, IMX273, IMX290, IMX327, IMX335, IMX392, IMX412, IMX415, IMX462, IMX565, IMX566, IMX567, IMX568, IMX900 |
+
+If the sensor supports 2 and 4 lanes, choose 4 lanes, but only if the camera connector provides them
+(e.g. Raspberry Pi 5, CM5; on CM4 only `cam0`, which is the 4-lane connector CAM1 of the IO board). The camera connectors of Raspberry Pi 3+, 4 and Zero 2 have 2 lanes.
+
+> [!NOTE]
+> The defaults differ per platform: BCM2712 is preset to 4 lanes and Onsemi, all others to 2 lanes and Sony.
+
+Alternatively, the lanes can be set with `vc-config` → "Configure Device Tree" (see [Configuration](#configuration)).
+A reboot is needed after every change.
 
 After a reboot the connected sensor(s) should be detected and visible as v4l2 capture devices
 Under the current Raspberry Pi OS with Bookworm, 
@@ -68,6 +97,17 @@ Raspi3-4
 | -------- | ----------- | ---------------- |
 | Cam0     | /dev/video0 | /dev/v4l-subdev0 |
 | Cam1     | /dev/video1 | /dev/v4l-subdev2 |
+
+## Self check
+To verify the installation and configuration, run the [self check](./tools/self_check.sh):
+```
+./tools/self_check.sh
+```
+It checks the package, driver modules, boot configuration, the active device tree, the devices on the
+camera I2C bus, the module ROM (sensor type, supported lanes, sensor manufacturer), the driver probe,
+libcamera and a short streaming test,
+and gives a hint for each problem found. Use `--no-stream` to skip the streaming test.
+
 # Build from source
 
 See [Build from Source](./docs/build_from_source.md)

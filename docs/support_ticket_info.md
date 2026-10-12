@@ -5,6 +5,15 @@ For a quick summary, you can run the export script under the next section or do 
 > [!TIP]
 > When sharing logs, please ensure they don't contain sensitive information. You can redact IP addresses, hostnames, or credentials if present.
 
+## Self Check
+
+Before opening a ticket, run the [self_check.sh](../tools/self_check.sh) script. It detects the most common
+setup problems (missing reboot, wrong lanes, wrong sensor manufacturer, camera not connected) and shows how to fix them:
+
+```bash
+./tools/self_check.sh
+```
+
 ## Complete Support Package
 
 You can create a complete support package by running the [collect_support_info.sh](../tools/collect_support_info.sh) script.
@@ -17,6 +26,9 @@ This script automatically collects:
 - V4L2 device information
 - Media controller topology
 - Camera diagnostic capture with debug logging
+- libcamera installation (packages, libraries, IPA modules, VC tuning files)
+- rpicam-apps and GStreamer versions, libcamerasrc plugin details
+- libcamera test run (rpicam-vid per camera and GStreamer libcamerasrc)
 - Kernel logs (dmesg and journalctl)
 
 To run the script:
