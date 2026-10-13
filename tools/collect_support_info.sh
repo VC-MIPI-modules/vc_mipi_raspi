@@ -111,8 +111,6 @@ dkms status >> "$INFO"
 section "Loaded VC MIPI Kernel Modules"
 lsmod | grep vc_mipi >> "$INFO"
 
-section "Module Info: vc_mipi_core"
-modinfo vc_mipi_core >> "$INFO" 2>&1
 
 section "Module Info: vc_mipi_camera"
 modinfo vc_mipi_camera >> "$INFO" 2>&1
@@ -154,12 +152,12 @@ for mediadev in /dev/media*; do
             echo "--- Camera: $subdev -> $videodev ---" >> "$INFO"
             
             # Save current debug level
-            if [ -f /sys/module/vc_mipi_core/parameters/debug ]; then
-                current_debug=$(cat /sys/module/vc_mipi_core/parameters/debug 2>/dev/null)
+            if [ -f /sys/module/vc_mipi_camera/parameters/debug ]; then
+                current_debug=$(cat /sys/module/vc_mipi_camera/parameters/debug 2>/dev/null)
                 
                 # Set debug level to 6 (registers)
                 echo "Setting debug level to 6..." >> "$INFO"
-                echo 6 | sudo tee /sys/module/vc_mipi_core/parameters/debug > /dev/null 2>&1
+                echo 6 | sudo tee /sys/module/vc_mipi_camera/parameters/debug > /dev/null 2>&1
             fi
             
             # Set trigger_mode to 0 (self-trigger/continuous)
@@ -190,7 +188,7 @@ for mediadev in /dev/media*; do
             
             # Restore previous debug level
             if [ -n "$current_debug" ]; then
-                echo "$current_debug" | sudo tee /sys/module/vc_mipi_core/parameters/debug > /dev/null 2>&1
+                echo "$current_debug" | sudo tee /sys/module/vc_mipi_camera/parameters/debug > /dev/null 2>&1
             fi
         fi
     fi

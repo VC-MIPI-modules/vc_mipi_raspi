@@ -101,7 +101,7 @@ else
 fi
 
 modules_ok=true
-for m in vc_mipi_core vc_mipi_modules vc_mipi_camera; do
+for m in vc_mipi_camera; do
     if [ ! -d /sys/module/$m ]; then
         fail "Kernel module $m not loaded"
         modules_ok=false
@@ -123,7 +123,7 @@ if ! $modules_ok; then
 fi
 if $modules_ok; then
     MOD_VERSION=$(cat /sys/module/vc_mipi_camera/version 2>/dev/null)
-    ok "Kernel modules loaded (version $MOD_VERSION)"
+    ok "Kernel module loaded (version $MOD_VERSION)"
     if [ -n "$PKG_VERSION" ] && [ -n "$MOD_VERSION" ] && [ "${PKG_VERSION%%-*}" != "$MOD_VERSION" ]; then
         warn "Loaded module version $MOD_VERSION differs from package version $PKG_VERSION"
         hint "Reboot to load the installed version"
