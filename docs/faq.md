@@ -36,7 +36,7 @@ The kernel module for the VC driver has to be reinstalled for the kernel as in t
 
 The driver is not loaded and the dmesg shows an error like:
 ```
-vc_mipi_modules disagree about version of module layout
+vc_mipi_camera: disagrees about version of module layout
 ```
 1. Check current version of driver by ```sudo dkms status```
 

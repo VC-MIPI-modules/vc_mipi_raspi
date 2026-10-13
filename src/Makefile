@@ -32,17 +32,18 @@ endif
 
 KERNEL_I2C_DIR := /lib/modules/$(shell uname -r)/kernel/drivers/media/i2c/
 
-SENSORDRIVERS := vc_mipi_core/vc_mipi_core.ko
-SENSORDRIVERS += vc_mipi_core/vc_mipi_modules.ko
-SENSORDRIVERS += vc_mipi_camera/vc_mipi_camera.ko
-SENSOR_DRIVER := vc_mipi_core
-SENSOR_DRIVER += vc_mipi_modules
-SENSOR_DRIVER += vc_mipi_camera
+SENSORDRIVERS := vc_mipi_camera.ko
+SENSOR_DRIVER := vc_mipi_camera
+# Separate modules from older driver versions, removed on install
+LEGACY_DRIVERS := vc_mipi_core vc_mipi_modules
 DEVICETREES	:= $(foreach sentype,$(SENSOR_NAMES),overlays/$(sentype).dtbo)
 DEVICETREES_RM := $(foreach sentype,$(SENSOR_NAMES),$(sentype).dtbo)
 OVERLAY_DIRS := $(wildcard ../overlays/overlays-*)
-obj-m := vc_mipi_core/
-obj-m += vc_mipi_camera/
+# Single module: camera driver, core and module descriptions linked into vc_mipi_camera.ko
+obj-m := vc_mipi_camera.o
+vc_mipi_camera-y := vc_mipi_camera/vc_mipi_camera.o
+vc_mipi_camera-y += vc_mipi_core/vc_mipi_core.o
+vc_mipi_camera-y += vc_mipi_core/vc_mipi_modules.o
 
 .PHONY: all copy-overlays
 
@@ -81,18 +82,17 @@ all: build
 
 clean:
 	$(MAKE) -C $(KERNEL_HEADERS) M=$(CURDIR) clean
-	-rm -f */Module.symvers */modules.order
+	-rm -f */Module.symvers */modules.order */*.ko
 	-rm -f $(SENSORDRIVERS)
 	-rm -f $(DEVICETREES)
 
 reload:
-	@LOGGING_LEVEL=$$(cat /sys/module/vc_mipi_core/parameters/debug 2>/dev/null || echo 3); \
+	@LOGGING_LEVEL=$$(cat /sys/module/vc_mipi_camera/parameters/debug 2>/dev/null || echo 3); \
 	sudo modprobe -r bcm2835-unicam; \
 	sudo modprobe -r rp1_cfe_downstream; \
 	sudo modprobe -r vc_mipi_camera; \
-	sudo modprobe -r vc_mipi_modules; \
-	sudo modprobe -r vc_mipi_core; \
-	for m in bcm2835_unicam rp1_cfe_downstream vc_mipi_camera vc_mipi_modules vc_mipi_core; do \
+	for m in $(LEGACY_DRIVERS); do lsmod | grep -q "^$$m " && sudo rmmod $$m; done; \
+	for m in bcm2835_unicam rp1_cfe_downstream vc_mipi_camera $(LEGACY_DRIVERS); do \
 		tries=0; \
 		while lsmod | grep -q "^$$m "; do \
 			tries=$$((tries+1)); \
@@ -105,15 +105,11 @@ reload:
 	done; \
 	sudo modprobe bcm2835-unicam || { echo "ERROR: failed to insert bcm2835-unicam"; exit 1; }; \
 	sudo modprobe rp1_cfe_downstream verbose_debug=1 || { echo "ERROR: failed to insert rp1_cfe_downstream"; exit 1; }; \
-	sudo modprobe vc_mipi_core || { echo "ERROR: failed to insert vc_mipi_core"; exit 1; }; \
-	sudo modprobe vc_mipi_modules || { echo "ERROR: failed to insert vc_mipi_modules"; exit 1; }; \
 	sudo modprobe vc_mipi_camera || { echo "ERROR: failed to insert vc_mipi_camera"; exit 1; }; \
-	echo $$LOGGING_LEVEL | sudo tee /sys/module/vc_mipi_core/parameters/debug >/dev/null
+	echo $$LOGGING_LEVEL | sudo tee /sys/module/vc_mipi_camera/parameters/debug >/dev/null
 unload:
 	-sudo modprobe -r vc_mipi_camera
-	-sudo modprobe -r vc_mipi_modules
-	-sudo modprobe -r vc_mipi_core
-
+	-for m in $(LEGACY_DRIVERS); do lsmod | grep -q "^$$m " && sudo rmmod $$m; done
 
 dev:	clean all install reload
 
@@ -127,12 +123,13 @@ installScripts:
 	grep -qxF "include config_vc-mipi-driver-bcm2712.txt" /boot/firmware/config.txt || echo "include config_vc-mipi-driver-bcm2712.txt" | sudo tee -a /boot/firmware/config.txt
 
 install: all
+	sudo rm -f $(foreach m,$(LEGACY_DRIVERS),$(KERNEL_I2C_DIR)/$(m).ko)
 	sudo install -p -m 644  $(SENSORDRIVERS)	/lib/modules/$(shell uname -r)/kernel/drivers/media/i2c/
 	# sudo install -p -m 644  $(DEVICETREES)	 $(BOOT_OVERLAYS_DIR)/
 	sudo /sbin/depmod -a $(shell uname -r)
 
 uninstall:
-	sudo rm -f $(foreach sencommon,$(SENSOR_DRIVER),$(KERNEL_I2C_DIR)/$(sencommon).ko)
+	sudo rm -f $(foreach sencommon,$(SENSOR_DRIVER) $(LEGACY_DRIVERS),$(KERNEL_I2C_DIR)/$(sencommon).ko)
 	sudo rm -f $(foreach dtbo,$(DEVICETREES_RM),$(BOOT_OVERLAYS_DIR)/$(dtbo))
 	sudo /sbin/depmod -a $(shell uname -r)
 

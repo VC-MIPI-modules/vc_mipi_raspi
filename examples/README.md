@@ -322,8 +322,8 @@ lsof /dev/video0
 sudo fuser -k /dev/video0
 
 # Restart camera driver
-sudo rmmod vc_mipi_core
-sudo modprobe vc_mipi_core
+sudo rmmod vc_mipi_camera
+sudo modprobe vc_mipi_camera
 ```## Processing Captured Frames
 
 ### Loading and Analyzing Y10 Frames

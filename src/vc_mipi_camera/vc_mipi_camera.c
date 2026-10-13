@@ -261,16 +261,12 @@ static int vc_sd_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *control)
 
         case V4L2_CID_VBLANK:
         {
-                /* Use the active (crop) height, not the full sensor native height.
-                 * Frame period is VMAX x 1H for every sensor — FLAG_DOUBLE_HEIGHT
-                 * affects ROI geometry, not the VMAX line total, so VMAX is simply
-                 * active_height + vblank. */
+                /* VMAX = active (crop) height + vblank */
                 u32 active_height = cam->state.frame.height > 0
                                         ? cam->state.frame.height
                                         : cam->ctrl.frame.height;
                 vc_core_set_vmax_overwrite(cam, active_height + control->value);
-                vc_sen_write_vmax(&cam->ctrl, cam->state.vmax_overwrite);
-                return 0;
+                return vc_sen_set_exposure(cam, cam->state.exposure);
         }
         case V4L2_CID_HFLIP:
         case V4L2_CID_VFLIP:
@@ -411,6 +407,17 @@ static int vc_sd_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state
         struct v4l2_mbus_framefmt *mf = &format->format;
 
         mutex_lock(&device->mutex);
+
+        if (format->which == V4L2_SUBDEV_FORMAT_TRY) {
+                if (vc_core_try_format(cam, mf->code))
+                        mf->code = vc_core_get_format(cam);
+                mf->width = min_t(__u32, mf->width, cam->ctrl.frame.width);
+                mf->height = min_t(__u32, mf->height, cam->ctrl.frame.height);
+                mf->field = V4L2_FIELD_NONE;
+                mf->colorspace = V4L2_COLORSPACE_SRGB;
+                mutex_unlock(&device->mutex);
+                return 0;
+        }
 
         vc_core_set_format(cam, mf->code);
         vc_core_set_frame(cam, 0, 0, mf->width, mf->height);
@@ -1029,11 +1036,7 @@ static struct v4l2_ctrl_config ctrl_vblank = {
 
 static vc_mode *vc_get_mode(struct vc_cam *cam)
 {
-        /* Guard against the sentinel value 0xff set by vc_core_state_init
-         * before a mode is formally selected.  Use ROM mode 0 as the
-         * reference when state.mode is out of range. */
-        __u8 safe_idx = (cam->state.mode < MAX_VC_DESC_MODES) ? cam->state.mode : 0;
-        struct vc_desc_mode *mode_desc = &cam->desc.modes[safe_idx];
+        struct vc_desc_mode *mode_desc = &cam->desc.modes[vc_mod_get_mode(cam)];
         vc_mode *mode = NULL;
 
         for (int i = 0; i < MAX_VC_MODES; i++)
@@ -1067,12 +1070,7 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
         vc_mode *mode = vc_get_mode(cam);
         if (!mode)
                 return;
-        /* Use the same safe index as vc_get_mode to avoid OOB when state.mode
-         * is still the 0xff sentinel set by vc_core_state_init. */
-        __u8 safe_mode_idx = (cam->state.mode < cam->desc.num_modes)
-                                 ? cam->state.mode
-                                 : 0;
-        struct vc_desc_mode *mode_desc = &cam->desc.modes[safe_mode_idx];
+        struct vc_desc_mode *mode_desc = &cam->desc.modes[vc_mod_get_mode(cam)];
         int num_lanes = mode->num_lanes;
         int bit_depth = vc_get_bit_depth(mode->format);
         u32 clk_pixel = cam->ctrl.clk_pixel;
@@ -1087,6 +1085,16 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
 
         /* Pixel rate = (data_rate_per_lane * num_lanes) / bits_per_pixel */
         pixel_rate.max = (u32)((u64)data_rate_mbps * num_lanes / bit_depth * 1000000);
+        /* libcamera's line time is (width + hblank) / pixel_rate. If the shortest line
+         * (hmax.min) is shorter than the width at this rate (e.g. IMX335: VMAX/HMAX count
+         * half lines), hblank cannot express it: raise the pixel rate so it can. */
+        if (clk_pixel > 0 && mode->hmax.min > 0)
+        {
+                u32 width = cam->state.frame.width > 0 ? cam->state.frame.width : cam->ctrl.frame.width;
+                u64 needed = div_u64((u64)width * clk_pixel + mode->hmax.min - 1, mode->hmax.min);
+                if (needed > pixel_rate.max)
+                        pixel_rate.max = (u32)needed;
+        }
         pixel_rate.def = pixel_rate.max;
 
         /* Compute actual vblank at the current operating point so that
@@ -1109,11 +1117,14 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
                  * takes precedence when a sensor mode specifies it; otherwise fall
                  * back to the generic vmax.def-based bound used for unresearched
                  * sensors. */
-                if (mode->vmax_row_margin > 0 || mode->vmax_row_floor > 0)
+                if (mode->vmax_row_margin > 0 || mode->vmax_row_floor > 0 || mode->vmax_row_scale > 0)
                 {
+                        /* Same limit as the core: VMAX >= scale * max(height + margin, floor) */
+                        u32 scale = mode->vmax_row_scale > 0 ? mode->vmax_row_scale : 1;
                         u32 vmax_min_real = height + mode->vmax_row_margin;
                         if (mode->vmax_row_floor > vmax_min_real)
                                 vmax_min_real = mode->vmax_row_floor;
+                        vmax_min_real *= scale;
                         vblank.min = vmax_min_real > height ? vmax_min_real - height : 0;
                 }
                 else
@@ -1141,11 +1152,10 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
                 }
                 else
                 {
-                        /* Native fps — apply crop optimisation in output-line units */
-                        vmax_actual = mode->vmax.def;
-                        if ((cam->ctrl.flags & FLAG_INCREASE_FRAME_RATE) &&
-                            height < cam->ctrl.frame.height)
-                                vmax_actual -= (cam->ctrl.frame.height - height);
+                        /* Native fps: the VMAX the core will write (crop optimisation,
+                         * row scale, margin, floor), so vblank matches the real frame. */
+                        vmax_actual = vc_core_get_optimized_vmax(cam, mode->num_lanes, mode->format,
+                                                                 cam->state.binning_mode, height);
                 }
 
                 vblank.def = vmax_actual > height
@@ -1269,9 +1279,21 @@ static void vc_update_clk_rates(struct vc_device *device, struct vc_cam *cam)
         {
                 device->vblank_ctrl->minimum = vblank.min;
                 device->vblank_ctrl->maximum = vblank.max;
+                /* Report the vblank in effect: with an active VMAX overwrite that is
+                 * overwrite - height, not the default. Otherwise a later request equal
+                 * to the default is dropped by the control framework as "unchanged"
+                 * and the old overwrite (e.g. a lower frame rate) stays active. */
+                s32 vb_cur = vblank.def;
+                if (cam->state.vmax_overwrite > 0)
+                {
+                        s32 height = cam->state.frame.height > 0 ? cam->state.frame.height
+                                                                 : cam->ctrl.frame.height;
+                        vb_cur = clamp_t(s32, cam->state.vmax_overwrite - height,
+                                         vblank.min, vblank.max);
+                }
                 device->vblank_ctrl->default_value = vblank.def;
-                device->vblank_ctrl->val = vblank.def;
-                device->vblank_ctrl->cur.val = vblank.def;
+                device->vblank_ctrl->val = vb_cur;
+                device->vblank_ctrl->cur.val = vb_cur;
         }
 
 
@@ -1551,6 +1573,7 @@ static struct i2c_driver vc_i2c_driver = {
 module_i2c_driver(vc_i2c_driver);
 
 MODULE_VERSION(VERSION_CAMERA);
+MODULE_INFO(core_version, VERSION);
 MODULE_DESCRIPTION("Vision Components GmbH - VC MIPI CSI-2 driver");
 MODULE_AUTHOR("Florian Schmid, Vision Components GmbH <florian.schmid@vision-components.com>");
 MODULE_AUTHOR("Peter Martienssen, Liquify Consulting <peter.martienssen@liquify-consulting.de>");

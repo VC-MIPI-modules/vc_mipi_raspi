@@ -58,7 +58,7 @@ If the errors disappear the issue is resolved. If they persist, collect `dmesg` 
 - After a kernel upgrade the driver may fail to load with messages like:
 
 ```text
-vc_mipi_modules disagree about version of module layout
+vc_mipi_camera: disagrees about version of module layout
 ```
 
 - Check DKMS status:
@@ -137,3 +137,46 @@ the pipeline cannot be started.
 
 1. Remove all prebuilt packages ```sudo apt-get remove libcamera-*```
 2. Install the libcamera again from here: [Libcamera Installation](./libcamera.md)
+
+---
+
+## Problem - Settings have no effect or the image is wrong (I2C register access)
+
+### Identification
+
+- A control (exposure, gain, frame rate, ...) is accepted but does not change the image.
+- Failed register accesses are logged at the default debug level (3), with the name of the calling function:
+
+```text
+[    x.xxxxx] vc_mipi_camera 10-001a: vc_sen_write_vmax(): Writing register 0x30d4 (value 0x02) to 0x1a failed
+[    x.xxxxx] vc_mipi_camera 10-001a: vc_sen_read_vmax(): Reading register 0x30d4 from 0x1a failed
+```
+
+### Reason
+
+- The sensor or the module controller does not respond on I2C (connection, power, sensor in standby).
+- The written register value is not the expected one.
+
+### Resolution
+
+1. Check for failed accesses:
+
+```sh
+sudo dmesg | grep -i "failed"
+```
+
+2. Trace every register access with debug level 6. Each read (`=>`) and write (`<=`) is logged with the calling function, address and value:
+
+```sh
+echo 6 | sudo tee /sys/module/vc_mipi_camera/parameters/debug
+# reproduce the problem, e.g. start streaming or change a control
+sudo dmesg | grep "addr: 0x"
+echo 3 | sudo tee /sys/module/vc_mipi_camera/parameters/debug   # back to default
+```
+
+```text
+[    x.xxxxx] vc_mipi_camera 10-001a: vc_sen_write_vmax():   addr: 0x30d4 <= value: 0x02
+[    x.xxxxx] vc_mipi_camera 10-001a: vc_sen_read_vmax():   addr: 0x30d4 => value: 0x02
+```
+
+Debug level 6 also enables all lower debug messages, so the log is verbose. The `<=` line is printed before the write is sent; a failed write is followed by the `Writing register ... failed` message.

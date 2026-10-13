@@ -680,7 +680,7 @@ dialog_set_debuglevel()
 {
 
 
-    currentlevel=$(cat "/sys/module/vc_mipi_core/parameters/debug")
+    currentlevel=$(cat "/sys/module/vc_mipi_camera/parameters/debug")
 
     echo "Current debug level: $currentlevel"
 
@@ -697,7 +697,7 @@ dialog_set_debuglevel()
     fi 
     echo "Selected subdevice: $subdev"
     echo "Debug level: $debuglevel"
-    echo $debuglevel | sudo tee /sys/module/vc_mipi_core/parameters/debug
+    echo $debuglevel | sudo tee /sys/module/vc_mipi_camera/parameters/debug
 }
 dialog_set_format() 
 {
@@ -965,11 +965,10 @@ dialog_show_config()
 
 dialog_get_versions()
 {
-    core_version=$(cat /sys/module/vc_mipi_core/version)
-    modules_version=$(cat /sys/module/vc_mipi_modules/version)
     camera_version=$(cat /sys/module/vc_mipi_camera/version)
+    core_version=$(modinfo -F core_version vc_mipi_camera 2>/dev/null)
 
-    whiptail --msgbox "vc_mipi_core version:    $core_version\nvc_mipi_modules version: $modules_version\nvc_mipi_camera version:  $camera_version" 15 50 --title "Version Information" 3>&1 1>&2 2>&3
+    whiptail --msgbox "vc_mipi_camera version: $camera_version\nvc_mipi_core version:   $core_version" 15 50 --title "Version Information" 3>&1 1>&2 2>&3
 
 }
 

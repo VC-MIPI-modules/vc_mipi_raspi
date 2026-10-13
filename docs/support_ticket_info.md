@@ -229,18 +229,16 @@ lsmod | grep vc_mipi
 Get module information:
 
 ```bash
-modinfo vc_mipi_core
 modinfo vc_mipi_camera
 ```
 
 ### Check Loaded Driver Version
 
-Each loaded VC MIPI module exposes its own version via sysfs:
+The driver is a single module (`vc_mipi_camera`, with `vc_mipi_core` linked in). Its version is exposed via sysfs, the core version via modinfo:
 
 ```bash
-cat /sys/module/vc_mipi_core/version
-cat /sys/module/vc_mipi_modules/version
 cat /sys/module/vc_mipi_camera/version
+modinfo -F core_version vc_mipi_camera
 ```
 
 ## 6. Installation Logs (when installation fails)
@@ -254,7 +252,7 @@ cat /var/lib/dkms/vc_mipi_*/*/build/make.log
 Or for specific version (replace VERSION and KERNEL accordingly):
 
 ```bash
-cat /var/lib/dkms/vc_mipi_core/VERSION/KERNEL/log/make.log
+cat /var/lib/dkms/vc-mipi-driver-PLATFORM/VERSION/KERNEL/log/make.log
 ```
 
 ### Package Installation Log
